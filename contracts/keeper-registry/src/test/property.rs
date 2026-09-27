@@ -15,9 +15,10 @@ use soroban_sdk::{
 };
 
 use super::common::*;
+use crate::reputation::REPUTATION_DECAY_HALF_LIFE_LEDGERS;
 use crate::{
-    split_reward, KeeperError, TaskType, INSTANCE_BUMP_THRESHOLD, MIN_TTL_LEDGERS,
-    UNBOND_DELAY_LEDGERS,
+    split_reward, KeeperError, TaskType, INSTANCE_BUMP_THRESHOLD, MIN_LOCK_LEDGERS,
+    MIN_TTL_LEDGERS, UNBOND_DELAY_LEDGERS,
 };
 
 use crate::invariants::{
@@ -619,5 +620,140 @@ proptest! {
             ttl_final > 0,
             "instance TTL lapsed after a sequence of bounded-gap mutating calls"
         );
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Reputation replay consistency (backlog 0325)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Independent reference for the reputation formula in
+/// `docs/REPUTATION_DESIGN.md`. It keeps the keeper's full action history and
+/// recomputes everything from scratch on every read, instead of updating
+/// counters incrementally the way the contract does, and decays by integer
+/// division rather than the contract's right shift. `(succeeded, ledger)`.
+#[derive(Default)]
+struct ReputationReplay {
+    history: std::vec::Vec<(bool, u32)>,
+}
+
+impl ReputationReplay {
+    fn successes(&self) -> u64 {
+        self.history.iter().filter(|(ok, _)| *ok).count() as u64
+    }
+
+    fn missed_claims(&self) -> u64 {
+        self.history.iter().filter(|(ok, _)| !*ok).count() as u64
+    }
+
+    fn last_updated_ledger(&self) -> u32 {
+        self.history.last().map_or(0, |(_, ledger)| *ledger)
+    }
+
+    fn stored_score(&self) -> u32 {
+        let actions = self.history.len() as u128;
+        if actions == 0 {
+            return 0;
+        }
+        (self.successes() as u128 * 10_000 / actions) as u32
+    }
+
+    fn effective_score(&self, ledger: u32) -> u32 {
+        let halvings = (ledger - self.last_updated_ledger()) / REPUTATION_DECAY_HALF_LIFE_LEDGERS;
+        if halvings >= u32::BITS {
+            return 0;
+        }
+        self.stored_score() / 2u32.pow(halvings)
+    }
+}
+
+/// One step for the keeper under test: wait `gap` ledgers, then either
+/// execute a task (`succeeded`) or let a claimed task's lock lapse and have
+/// another keeper take it over.
+#[derive(Clone, Debug)]
+struct ReputationStep {
+    gap: u32,
+    succeeded: bool,
+}
+
+fn reputation_step() -> impl Strategy<Value = ReputationStep> {
+    const HALF_LIFE: u32 = REPUTATION_DECAY_HALF_LIFE_LEDGERS;
+    // Every action updates the record at the ledger it lands on, so a gap
+    // measured from the previous step is also measured from the last update;
+    // the pinned gaps land exactly on and just before the decay boundaries.
+    let gap = prop_oneof![
+        0u32..3 * HALF_LIFE,
+        Just(0u32),
+        Just(HALF_LIFE - 1),
+        Just(HALF_LIFE),
+        Just(2 * HALF_LIFE - 1),
+        Just(2 * HALF_LIFE),
+    ];
+    (gap, any::<bool>()).prop_map(|(gap, succeeded)| ReputationStep { gap, succeeded })
+}
+
+fn register_reputation_task(s: &TestSetup) -> u64 {
+    s.registry.register_task(
+        &s.admin,
+        &TaskType::Liquidation,
+        &calldata(&s.env),
+        &1_000i128,
+        &(s.env.ledger().timestamp() + 3_600),
+        &DEFAULT_TTL_LEDGERS,
+        &MIN_LOCK_LEDGERS,
+        &None,
+    )
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(32))]
+
+    // A keeper's stored record, and its decayed score at every ledger the
+    // property visits, always equal a from-scratch replay of the keeper's
+    // action history. Decay is exercised in the same run as the updates, so
+    // an update that wrongly built on a decayed score (or a read that decayed
+    // from the wrong ledger) diverges from the replay and fails here.
+    #[test]
+    fn property_reputation_matches_replay_of_action_history(
+        steps in prop::collection::vec(reputation_step(), 1..16),
+    ) {
+        let s = setup_long_lived();
+        let keeper = Address::generate(&s.env);
+        let mut replay = ReputationReplay::default();
+
+        for step in steps {
+            advance(&s.env, step.gap, 0);
+            let now = s.env.ledger().sequence();
+            prop_assert_eq!(
+                s.registry.effective_reputation(&keeper).score_bps,
+                replay.effective_score(now),
+                "decayed score diverged {} ledgers after the last update",
+                now - replay.last_updated_ledger()
+            );
+
+            let task_id = register_reputation_task(&s);
+            s.registry.claim_task(&keeper, &task_id);
+            if step.succeeded {
+                s.registry
+                    .execute_task(&keeper, &task_id, &Bytes::from_slice(&s.env, b"p"));
+            } else {
+                advance(&s.env, MIN_LOCK_LEDGERS, 0);
+                s.registry.claim_task(&Address::generate(&s.env), &task_id);
+            }
+            replay
+                .history
+                .push((step.succeeded, s.env.ledger().sequence()));
+
+            let stored = s.registry.keeper_reputation(&keeper);
+            prop_assert_eq!(stored.successes, replay.successes());
+            prop_assert_eq!(stored.missed_claims, replay.missed_claims());
+            prop_assert_eq!(stored.score_bps, replay.stored_score());
+            prop_assert_eq!(stored.last_updated_ledger, replay.last_updated_ledger());
+            prop_assert_eq!(
+                s.registry.effective_reputation(&keeper).score_bps,
+                replay.stored_score(),
+                "a record updated this ledger has not decayed"
+            );
+        }
     }
 }
