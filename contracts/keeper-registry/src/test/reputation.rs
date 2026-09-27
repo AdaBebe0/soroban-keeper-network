@@ -88,7 +88,7 @@ fn keeper_reputation_returns_stored_record_and_zero_for_new_keeper() {
 
 #[test]
 fn effective_reputation_decays_at_exact_half_life_boundaries_without_writing() {
-    let s = setup();
+    let s = setup_long_lived();
     let keeper = Address::generate(&s.env);
     let task_id = register_default_task(&s);
     s.registry.claim_task(&keeper, &task_id);
@@ -119,7 +119,7 @@ fn effective_reputation_decays_at_exact_half_life_boundaries_without_writing() {
 
 #[test]
 fn effective_reputation_for_untracked_keeper_is_zero_at_any_ledger() {
-    let s = setup();
+    let s = setup_long_lived();
     let keeper = Address::generate(&s.env);
     advance(
         &s.env,
