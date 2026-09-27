@@ -155,6 +155,13 @@ pub(crate) const TTL_SAFETY_MARGIN_LEDGERS: u32 = 17_280; // ~1 day
 pub const DEFAULT_FEE_BPS: u32 = 0;
 
 // ─────────────────────────────────────────────────────────────────────────────
+/// Ledgers of persistent-storage lifetime requested for a keeper's stake
+/// entry each time it is written. Mirrors [`KEEPER_BALANCE_BUMP_LEDGERS`].
+pub(crate) const KEEPER_STAKE_BUMP_LEDGERS: u32 = 100_000;
+/// Renew a keeper stake entry only once fewer than this many ledgers
+/// remain. Mirrors [`KEEPER_BALANCE_BUMP_THRESHOLD`].
+pub(crate) const KEEPER_STAKE_BUMP_THRESHOLD: u32 = 50_000;
+
 // Staking (E06) — see docs/STAKING_DESIGN.md
 // ─────────────────────────────────────────────────────────────────────────────
 

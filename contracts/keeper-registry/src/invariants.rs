@@ -276,6 +276,12 @@ pub fn assert_fee_bounded(
 /// never change any task's escrow or any keeper's credited balance.
 /// Callers snapshot the relevant balances before and after the admin call
 /// and pass both snapshots here.
+///
+/// **Deliberately excludes `slash` and keeper stake (E06).** `slash` is an
+/// admin-triggered action whose entire purpose is to move a keeper's stake —
+/// an isolation invariant that included stake would be actively wrong for
+/// it, not merely an untested gap. This exclusion is intentional and
+/// recorded here rather than left implicit; see `docs/STAKING_DESIGN.md`.
 pub fn assert_admin_action_isolated(
     task_rewards_before: &[(u64, i128)],
     task_rewards_after: &[(u64, i128)],

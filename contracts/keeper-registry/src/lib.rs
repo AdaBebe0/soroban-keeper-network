@@ -47,12 +47,12 @@
 //! bots must inspect and simulate verifier calls (`verify`) prior to claiming
 //! to ensure net profitability. See `docs/VERIFIER_DESIGN.md` §3.
 //!
-//! ## Storage Layout
 //! - Instance:   Admin, FeeBps, Paused, TaskCounter, RewardToken,
 //!   FeesAccrued, MinStake, SlashCounter, DisputeWindowLedgers
 //! - Persistent: Task(id) → Task struct, KeeperReward(address) → i128,
 //!   KeeperStake(address) → i128, UnbondRequest(address) → UnbondRequest,
-//!   Slash(id) → SlashRecord, PendingReward(address) → Vec<PendingCredit>
+//!   Slash(id) → SlashRecord, PendingReward(address) → Vec<PendingCredit>,
+//!   ReputationRecord(address) → ReputationRecord (E06 reputation tracking)
 
 #![no_std]
 
@@ -64,6 +64,7 @@ mod constants;
 mod errors;
 mod events;
 mod internal;
+mod reputation;
 mod staking;
 mod task;
 mod types;
@@ -76,6 +77,7 @@ pub use events::*;
 pub use types::{
     BatchTaskParams, DataKey, PendingCredit, SlashRecord, Task, TaskStatus, TaskType, UnbondRequest,
 };
+pub use reputation::ReputationRecord;
 pub use verifier::{IKeeperVerifier, KeeperVerifierClient};
 
 // Re-exported for the test and fuzz harnesses, which assert on the reward
