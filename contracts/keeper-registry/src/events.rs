@@ -238,3 +238,17 @@ pub fn emit_rewards_finalized(e: &Env, keeper: &Address, task_id: u64, amount: i
         (keeper.clone(), task_id, amount),
     );
 }
+
+// ─── E07 — Keeper Reputation ───────────────────────────────────────────
+// New reputation events go here.
+
+/// Emitted every time a keeper's stored reputation record changes. `action`
+/// is `"success"` (an `execute_task` payout) or `"missed"` (a lapsed claim
+/// taken over in `claim_task`); `score_bps` is the stored score after the
+/// update, before any read-time decay.
+pub fn emit_reputation_updated(e: &Env, keeper: &Address, action: Symbol, score_bps: u32) {
+    e.events().publish(
+        (symbol_short!("rep"), symbol_short!("keeper")),
+        (keeper.clone(), action, score_bps),
+    );
+}

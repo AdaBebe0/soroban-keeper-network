@@ -485,6 +485,7 @@ without breaking existing consumers.
 | `TaskCancelled` | `cancel_task` | `("cancel", "task")` | `(task_id: u64, owner: Address)` |
 | `TaskExpired` | `expire_task` | `("exp", "task")` | `(task_id: u64,)` |
 | `RewardsWithdrawn` | `withdraw_rewards` | `("wdraw", "reward")` | `(keeper: Address, amount: i128)` |
+| `ReputationUpdated` | `execute_task` / `claim_task` | `("rep", "keeper")` | `(keeper: Address, action: Symbol, score_bps: u32)` — `action` is `"success"` (from `execute_task`) or `"missed"` (a lapsed claim taken over in `claim_task`); `score_bps` is the stored score after the update |
 | `Paused` | `pause` / `unpause` | `("paused", "admin")` | `(paused: bool,)` — `true` from `pause`, `false` from `unpause` |
 | `FeeUpdated` | `set_fee_bps` | `("fee", "admin")` | `(old_bps: u32, new_bps: u32)` |
 | `MinRewardUpdated` | `set_min_reward` | `("minrwd", "admin")` | `(old_min: i128, new_min: i128)` |
@@ -508,6 +509,11 @@ Notes:
   not just one.
 - `VerifierAttached` is emitted on `register_task` when an optional verifier is attached, preserving the standard 4-tuple schema of `TaskRegistered` for backwards compatibility with existing event parsers.
 - `VerifierUpdated` follows the `FeeUpdated` / `MinRewardUpdated` before/after pattern with `(task_id, old_verifier, new_verifier)`.
+- `ReputationUpdated` is emitted in the same invocation as, and before, the
+  lifecycle event that caused it: `TaskExecuted` for `"success"`, and the
+  taking-over keeper's `TaskClaimed` for `"missed"`, where the event's `keeper`
+  is the previous claimer, not the caller. `score_bps` is the stored score, not
+  the read-time decayed score `effective_reputation` returns.
 - `StakeDeposited`/`UnbondInitiated`/`StakeWithdrawn`/`Slashed`/`MinStakeUpdated`/`SlashAppealRaised`/`SlashAppealResolved` are the staking epic's events (E06, `docs/STAKING_DESIGN.md`). `Slashed`'s `reason` is a `Symbol`, not free text — see the design doc for the trust model behind `slash`'s authorization.
 
 #### Task Lifecycle State Machine

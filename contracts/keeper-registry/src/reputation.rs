@@ -6,9 +6,12 @@
 //! overwritten so callers can judge the confidence behind the rate. The
 //! effective score is lazily halved once per 100,000 ledgers without changing
 //! stored history.
+//!
+//! Every change to a stored record emits a `("rep", "keeper")` event.
 
-use soroban_sdk::{contractimpl, contracttype, Address, Env};
+use soroban_sdk::{contractimpl, contracttype, symbol_short, Address, Env, Symbol};
 
+use crate::events::emit_reputation_updated;
 use crate::{KeeperRegistry, KeeperRegistryArgs, KeeperRegistryClient};
 
 /// One score half-life, in ledgers. Decay is a deterministic right shift by
@@ -72,6 +75,13 @@ fn update(e: &Env, keeper: &Address, success: bool) {
     e.storage()
         .persistent()
         .extend_ttl(&key, REPUTATION_TTL_THRESHOLD, REPUTATION_TTL_LEDGERS);
+
+    let action: Symbol = if success {
+        symbol_short!("success")
+    } else {
+        symbol_short!("missed")
+    };
+    emit_reputation_updated(e, keeper, action, record.score_bps);
 }
 
 pub(crate) fn record_success(e: &Env, keeper: &Address) {

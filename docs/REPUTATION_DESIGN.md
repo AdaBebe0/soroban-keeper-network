@@ -58,6 +58,15 @@ permissionless `claim_task` rule.
 On-chain reputation is useful as an auditable, informational record. The
 honest ceiling for this design is the record and its read-only views. The
 registry will not reject, delay, or reorder claims based on reputation.
+## Events
+
+Every change to a stored record emits `("rep", "keeper")` with
+`(keeper, action, score_bps)`. `action` is `"success"` or `"missed"`, and
+`score_bps` is the stored score after the update. Because each event carries
+the resulting score, an indexer can rebuild each keeper's score history from
+events alone, without calling the contract. The README event table has the
+exact shape.
+
 # Reputation Design (E07)
 
 This document pins the contract-level design for on-chain keeper reputation before implementation starts. It answers the core questions for E07, states explicit tradeoffs, and names any dependency on the staking work in E06.
