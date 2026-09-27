@@ -1,5 +1,6 @@
 //! Storage keys and the domain types they hold.
 
+use soroban_sdk::{contracttype, Address, Bytes, BytesN};
 use soroban_sdk::{contracttype, Address, Bytes, Symbol};
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -23,6 +24,27 @@ pub enum DataKey {
     /// Minimum reward a task may be registered with. Guards against dust-spam
     /// tasks that would cost keepers more in fees than they pay out. Default 0.
     MinReward,
+    /// A keeper's current bonded stake (E06, `docs/STAKING_DESIGN.md`). Kept
+    /// under its own key, never conflated with `KeeperReward`, mirroring the
+    /// separation already kept between `FeesAccrued` and task escrow.
+    KeeperStake(Address),
+    /// At most one in-flight unbonding request per keeper. A second
+    /// `initiate_unbond` call while one is already pending replaces it,
+    /// using the new total — see `docs/STAKING_DESIGN.md` §3.
+    UnbondRequest(Address),
+    /// Presence-only marker: this slash incident id has already been
+    /// slashed once. See `docs/STAKING_DESIGN.md` §6.
+    SlashIncident(BytesN<32>),
+}
+
+/// A keeper's pending stake withdrawal, started by `initiate_unbond` and
+/// only releasable once `e.ledger().sequence() >= release_ledger`. See
+/// `docs/STAKING_DESIGN.md` §3.
+#[contracttype]
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct UnbondRequest {
+    pub amount: i128,
+    pub release_ledger: u32,
 
     // ─── E06 — Staking & Slashing (docs/STAKING_DESIGN.md) ─────────────
     /// A keeper's currently-bonded stake. Excludes anything mid-unbond —

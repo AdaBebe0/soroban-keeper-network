@@ -41,6 +41,18 @@
 //! to ensure net profitability. See `docs/VERIFIER_DESIGN.md` §3.
 //!
 //! ## Storage Layout
+//! - Instance:   Admin, FeeBps, Paused, TaskCounter, RewardToken, FeesAccrued
+//! - Persistent: Task(id) → Task struct, KeeperReward(address) → i128,
+//!   KeeperStake(address) → i128, UnbondRequest(address) → UnbondRequest,
+//!   SlashIncident(incident_id) → () (E06, `docs/STAKING_DESIGN.md`)
+//!
+//! ## Keeper Staking & Slashing (E06)
+//! `stake_deposit` / `initiate_unbond` / `withdraw_stake` / `slash` let a
+//! keeper post collateral that an admin may reduce (`slash`) for
+//! off-chain-adjudicated misbehavior. v1 is admin-triggered, not automatic
+//! and not dispute-based — see `docs/STAKING_DESIGN.md` for the full design
+//! and the trade-offs behind that choice. Independent of task escrow and
+//! reward accounting; `claim_task`/`execute_task` behavior is unchanged.
 //! - Instance:   Admin, FeeBps, Paused, TaskCounter, RewardToken,
 //!   FeesAccrued, MinStake, SlashCounter
 //! - Persistent: Task(id) → Task struct, KeeperReward(address) → i128,
@@ -67,6 +79,7 @@ mod views;
 pub use constants::*;
 pub use errors::KeeperError;
 pub use events::*;
+pub use types::{BatchTaskParams, DataKey, Task, TaskStatus, TaskType, UnbondRequest};
 pub use types::{BatchTaskParams, DataKey, SlashRecord, Task, TaskStatus, TaskType, UnbondRequest};
 pub use reputation::ReputationRecord;
 pub use types::{BatchTaskParams, DataKey, Task, TaskStatus, TaskType};
