@@ -6,9 +6,14 @@
 //! overwritten so callers can judge the confidence behind the rate. The
 //! effective score is lazily halved once per 100,000 ledgers without changing
 //! stored history.
+//!
+//! The admin may set an eligibility floor that `claim_task` checks against the
+//! claiming keeper's stored score; it defaults to 0, which disables it.
 
 use soroban_sdk::{contractimpl, contracttype, Address, Env};
 
+use crate::errors::KeeperError;
+use crate::types::DataKey;
 use crate::{KeeperRegistry, KeeperRegistryArgs, KeeperRegistryClient};
 
 /// One score half-life, in ledgers. Decay is a deterministic right shift by
@@ -87,6 +92,33 @@ pub(crate) fn stored_record(e: &Env, keeper: &Address) -> ReputationRecord {
         .persistent()
         .get(&ReputationKey::Keeper(keeper.clone()))
         .unwrap_or_else(ReputationRecord::zero)
+}
+
+pub(crate) fn reputation_floor_bps(e: &Env) -> u32 {
+    e.storage()
+        .instance()
+        .get(&DataKey::ReputationFloor)
+        .unwrap_or(0)
+}
+
+/// Rejects `keeper` if its stored score is below the configured floor.
+///
+/// The stored score is used, not the decayed one: decay only ever lowers a
+/// score, and a keeper can only raise it by claiming, so gating on the decayed
+/// score would permanently lock out a reliable keeper that merely went idle
+/// for a few half-lives. A keeper with no tracked history scores 0, so any
+/// non-zero floor also excludes new addresses; exempting them instead would
+/// let a low-score keeper evade the floor by claiming from a fresh address.
+pub(crate) fn require_reputation_floor(e: &Env, keeper: &Address) -> Result<(), KeeperError> {
+    let floor = reputation_floor_bps(e);
+    // Disabled floor: skip the per-keeper read entirely.
+    if floor == 0 {
+        return Ok(());
+    }
+    if stored_record(e, keeper).score_bps < floor {
+        return Err(KeeperError::ReputationBelowFloor);
+    }
+    Ok(())
 }
 
 /// Computes the read-time reputation. At elapsed ledger `n * half_life`, the

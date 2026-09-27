@@ -8,6 +8,7 @@ use soroban_sdk::{contractimpl, Address, Env};
 use crate::constants::*;
 use crate::errors::KeeperError;
 use crate::internal::*;
+use crate::reputation::reputation_floor_bps;
 use crate::types::{DataKey, Task, TaskStatus};
 use crate::{KeeperRegistry, KeeperRegistryArgs, KeeperRegistryClient};
 
@@ -97,6 +98,11 @@ impl KeeperRegistry {
     /// Minimum reward required to register a task (0 if unset).
     pub fn min_reward(e: Env) -> i128 {
         min_reward_floor(&e)
+    }
+    /// Minimum stored reputation score, in basis points, required to claim a
+    /// task (0 if unset, which disables the check).
+    pub fn reputation_floor(e: Env) -> u32 {
+        reputation_floor_bps(&e)
     }
     /// Maximum number of entries `batch_register_tasks` accepts. See
     /// [`MAX_BATCH_SIZE`] — exposed so integrators can chunk their worklists

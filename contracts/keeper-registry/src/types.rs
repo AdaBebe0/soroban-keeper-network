@@ -56,6 +56,11 @@ pub enum DataKey {
     /// resolution can find and remove exactly the credit it is about, never
     /// touching an already-finalized balance.
     PendingReward(Address),
+
+    // ─── E07 — Keeper Reputation ────────────────────────────────────────
+    /// Minimum stored reputation score, in basis points, a keeper needs to
+    /// claim a task. Default 0, which disables the check.
+    ReputationFloor,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

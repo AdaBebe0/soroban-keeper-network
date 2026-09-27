@@ -488,6 +488,7 @@ without breaking existing consumers.
 | `Paused` | `pause` / `unpause` | `("paused", "admin")` | `(paused: bool,)` — `true` from `pause`, `false` from `unpause` |
 | `FeeUpdated` | `set_fee_bps` | `("fee", "admin")` | `(old_bps: u32, new_bps: u32)` |
 | `MinRewardUpdated` | `set_min_reward` | `("minrwd", "admin")` | `(old_min: i128, new_min: i128)` |
+| `ReputationFloorUpdated` | `set_reputation_floor` | `("repfloor", "admin")` | `(old_floor_bps: u32, new_floor_bps: u32)` — `0` means the floor is disabled |
 | `AdminTransferred` | `transfer_admin` | `("admin", "xfer")` | `(old_admin: Address, new_admin: Address)` |
 | `FeesSwept` | `sweep_fees` | `("sweep", "admin")` | `(treasury: Address, amount: i128, remaining: i128)` |
 | `Upgraded` | `upgrade` | `("upgrade", "admin")` | `(admin: Address, new_wasm_hash: BytesN<32>)` — emitted before the executable is swapped |

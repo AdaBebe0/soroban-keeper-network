@@ -6,7 +6,8 @@ The registry stores a keeper's successful-task rate and missed-claim count.
 The score is informational: successful executions and expired lock windows
 update the record, and readers can inspect both the stored record and a
 read-time decayed score. This note evaluates whether that score can fairly
-prioritize `claim_task` on-chain.
+prioritize `claim_task` on-chain, and records the one on-chain use it does
+have: an optional, admin-configured eligibility floor.
 
 ## Recommendation
 
@@ -56,8 +57,42 @@ permissionless `claim_task` rule.
 ## Decision
 
 On-chain reputation is useful as an auditable, informational record. The
-honest ceiling for this design is the record and its read-only views. The
-registry will not reject, delay, or reorder claims based on reputation.
+honest ceiling for claim *priority* is the record and its read-only views:
+the registry will not delay or reorder claims based on reputation.
+
+The one exception is the eligibility floor below. It is off by default, and
+it never compares keepers against each other.
+
+## Eligibility floor
+
+The admin can set a floor with `set_reputation_floor(admin, floor_bps)`.
+`claim_task` then rejects a keeper whose stored `score_bps` is below the floor,
+returning `ReputationBelowFloor`. A floor is not a priority rule. It checks only
+the claiming keeper's own record, never another keeper's concurrent intent, so
+it avoids the ordering problem described above.
+
+- **Default and range.** The floor is stored under `DataKey::ReputationFloor`
+  in instance storage. It defaults to `0`, which disables the check, so
+  existing keepers are not retroactively locked out. `reputation_floor()`
+  reads it. A floor above `MAX_REPUTATION_FLOOR_BPS` (10,000) is rejected
+  with `InvalidReputationFloor`, because no keeper could reach it. Every change
+  emits `("repfloor", "admin")` with the old and new floor.
+- **Inclusive.** A keeper whose score equals the floor may claim.
+- **Stored score, not decayed score.** Decay only lowers a score, and a keeper
+  can raise its score only by claiming. Gating on the decayed score would
+  therefore permanently lock out a reliable keeper that went idle for a few
+  half-lives. Decay stays a read-time signal for off-chain consumers.
+- **New keepers are not exempt.** An address with no history scores `0`, so
+  any non-zero floor closes claiming to it. Exempting new addresses would let a
+  low-score keeper evade the floor by claiming from a fresh one. An admin who
+  enables a floor is choosing a closed set of established keepers, and must
+  lower the floor to admit anyone new. The floor is therefore a policy switch
+  for a curated deployment, not a default for a permissionless one.
+- **Check order.** The floor is checked after the task-state checks and before
+  any write. So `ReputationBelowFloor` always means "this task was claimable,
+  but not by you." A rejected takeover also records no missed claim against
+  the previous claimer.
+
 # Reputation Design (E07)
 
 This document pins the contract-level design for on-chain keeper reputation before implementation starts. It answers the core questions for E07, states explicit tradeoffs, and names any dependency on the staking work in E06.

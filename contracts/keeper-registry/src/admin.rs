@@ -3,9 +3,11 @@
 
 use soroban_sdk::{contractimpl, log, Address, BytesN, Env};
 
+use crate::constants::MAX_REPUTATION_FLOOR_BPS;
 use crate::errors::KeeperError;
 use crate::events::*;
 use crate::internal::*;
+use crate::reputation::reputation_floor_bps;
 use crate::types::DataKey;
 use crate::{KeeperRegistry, KeeperRegistryArgs, KeeperRegistryClient};
 
@@ -79,9 +81,10 @@ impl KeeperRegistry {
     // | `withdraw_rewards` | allowed     | keeper pulling already-earned balance  |
     // | read-only views    | allowed     | side-effect-free, never gated          |
     //
-    // `set_fee_bps`/`set_min_reward`/`transfer_admin`/`upgrade`/`sweep_fees`
-    // are admin-only (`require_admin`) and were never in scope for the pause
-    // gate at all — pausing doesn't restrict what the admin itself can do.
+    // `set_fee_bps`/`set_min_reward`/`set_reputation_floor`/`transfer_admin`/
+    // `upgrade`/`sweep_fees` are admin-only (`require_admin`) and were never in
+    // scope for the pause gate at all — pausing doesn't restrict what the admin
+    // itself can do.
 
     pub fn pause(e: Env, admin: Address) -> Result<(), KeeperError> {
         require_admin(&e, &admin)?;
@@ -127,6 +130,26 @@ impl KeeperRegistry {
         let old_min: i128 = min_reward_floor(&e);
         e.storage().instance().set(&DataKey::MinReward, &min_reward);
         emit_min_reward_updated(&e, old_min, min_reward);
+        Ok(())
+    }
+    // ── set_reputation_floor ──────────────────────────────────────────────────
+    //
+    // Admin sets the minimum stored reputation score, in basis points, a keeper
+    // needs to claim a task (see `reputation::require_reputation_floor`). `0`,
+    // the default, disables the check. Only future claims are affected; an
+    // existing claim is never revoked.
+
+    pub fn set_reputation_floor(e: Env, admin: Address, floor_bps: u32) -> Result<(), KeeperError> {
+        require_admin(&e, &admin)?;
+        if floor_bps > MAX_REPUTATION_FLOOR_BPS {
+            return Err(KeeperError::InvalidReputationFloor);
+        }
+        bump_instance(&e);
+        let old_floor = reputation_floor_bps(&e);
+        e.storage()
+            .instance()
+            .set(&DataKey::ReputationFloor, &floor_bps);
+        emit_reputation_floor_updated(&e, old_floor, floor_bps);
         Ok(())
     }
     // ── transfer_admin ────────────────────────────────────────────────────────

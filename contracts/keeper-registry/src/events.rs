@@ -238,3 +238,13 @@ pub fn emit_rewards_finalized(e: &Env, keeper: &Address, task_id: u64, amount: i
         (keeper.clone(), task_id, amount),
     );
 }
+
+// ─── E07 — Keeper Reputation ───────────────────────────────────────────
+// New reputation events go here.
+
+pub fn emit_reputation_floor_updated(e: &Env, old_floor_bps: u32, new_floor_bps: u32) {
+    e.events().publish(
+        (symbol_short!("repfloor"), symbol_short!("admin")),
+        (old_floor_bps, new_floor_bps),
+    );
+}

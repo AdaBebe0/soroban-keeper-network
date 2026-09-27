@@ -4,6 +4,7 @@ use soroban_sdk::{testutils::Address as _, Address, Bytes};
 
 use super::common::*;
 use crate::reputation::stored_record;
+use crate::KeeperError;
 
 fn record(s: &TestSetup, keeper: &Address) -> crate::reputation::ReputationRecord {
     s.env
@@ -122,4 +123,143 @@ fn effective_reputation_for_untracked_keeper_is_zero_at_any_ledger() {
         s.registry.effective_reputation(&keeper),
         crate::ReputationRecord::zero()
     );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Claim-eligibility floor
+// ─────────────────────────────────────────────────────────────────────────────
+
+fn execute_as(s: &TestSetup, keeper: &Address) {
+    let task_id = register_default_task(s);
+    s.registry.claim_task(keeper, &task_id);
+    s.registry
+        .execute_task(keeper, &task_id, &Bytes::from_slice(&s.env, b"proof"));
+}
+
+/// Claims a task as `keeper` and lets another keeper take it over once the
+/// lock lapses, recording one missed claim against `keeper`.
+fn miss_as(s: &TestSetup, keeper: &Address) {
+    let other = Address::generate(&s.env);
+    let (task_id, unlock_at) = claim_with_lock(s, keeper, 120);
+    goto_ledger(&s.env, unlock_at);
+    s.registry.claim_task(&other, &task_id);
+}
+
+/// Two successes and one miss: a stored score of 6_666 bps.
+fn keeper_scoring_6666(s: &TestSetup) -> Address {
+    let keeper = Address::generate(&s.env);
+    execute_as(s, &keeper);
+    execute_as(s, &keeper);
+    miss_as(s, &keeper);
+    assert_eq!(s.registry.keeper_reputation(&keeper).score_bps, 6_666);
+    keeper
+}
+
+#[test]
+fn reputation_floor_defaults_to_disabled_and_admits_untracked_keepers() {
+    let s = setup();
+    assert_eq!(s.registry.reputation_floor(), 0);
+
+    let newcomer = Address::generate(&s.env);
+    let task_id = register_default_task(&s);
+    s.registry.claim_task(&newcomer, &task_id);
+    assert_eq!(s.registry.get_task(&task_id).claimer, Some(newcomer));
+}
+
+#[test]
+fn reputation_floor_admits_keeper_at_or_above_it_and_rejects_one_point_below() {
+    let s = setup();
+    let keeper = keeper_scoring_6666(&s);
+
+    // Floor one point below the keeper's score: the keeper is above it.
+    s.registry.set_reputation_floor(&s.admin, &6_665);
+    let task_id = register_default_task(&s);
+    s.registry.claim_task(&keeper, &task_id);
+    assert_eq!(s.registry.get_task(&task_id).claimer, Some(keeper.clone()));
+
+    // Floor exactly at the keeper's score: the comparison is inclusive.
+    s.registry.set_reputation_floor(&s.admin, &6_666);
+    let task_id = register_default_task(&s);
+    s.registry.claim_task(&keeper, &task_id);
+    assert_eq!(s.registry.get_task(&task_id).claimer, Some(keeper.clone()));
+
+    // Floor one point above the keeper's score: the keeper is below it.
+    s.registry.set_reputation_floor(&s.admin, &6_667);
+    let task_id = register_default_task(&s);
+    assert_eq!(
+        s.registry.try_claim_task(&keeper, &task_id),
+        Err(Ok(KeeperError::ReputationBelowFloor))
+    );
+    assert_eq!(s.registry.get_task(&task_id).claimer, None);
+}
+
+#[test]
+fn reputation_floor_rejects_untracked_keeper_once_enabled() {
+    let s = setup();
+    s.registry.set_reputation_floor(&s.admin, &1);
+
+    let newcomer = Address::generate(&s.env);
+    let task_id = register_default_task(&s);
+    assert_eq!(
+        s.registry.try_claim_task(&newcomer, &task_id),
+        Err(Ok(KeeperError::ReputationBelowFloor))
+    );
+}
+
+#[test]
+fn reputation_floor_rejection_on_takeover_records_nothing_against_previous_claimer() {
+    let s = setup();
+    let incumbent = Address::generate(&s.env);
+    execute_as(&s, &incumbent);
+    let (task_id, unlock_at) = claim_with_lock(&s, &incumbent, 120);
+    let incumbent_before = s.registry.keeper_reputation(&incumbent);
+
+    s.registry.set_reputation_floor(&s.admin, &5_000);
+    goto_ledger(&s.env, unlock_at);
+    let newcomer = Address::generate(&s.env);
+    assert_eq!(
+        s.registry.try_claim_task(&newcomer, &task_id),
+        Err(Ok(KeeperError::ReputationBelowFloor))
+    );
+
+    let task = s.registry.get_task(&task_id);
+    assert_eq!(task.claimer, Some(incumbent.clone()));
+    assert_eq!(s.registry.keeper_reputation(&incumbent), incumbent_before);
+}
+
+#[test]
+fn reputation_floor_does_not_mask_task_state_errors() {
+    let s = setup();
+    let holder = Address::generate(&s.env);
+    let (task_id, _) = claim_with_lock(&s, &holder, 120);
+    s.registry.set_reputation_floor(&s.admin, &10_000);
+    let newcomer = Address::generate(&s.env);
+
+    assert_eq!(
+        s.registry.try_claim_task(&newcomer, &999),
+        Err(Ok(KeeperError::TaskNotFound))
+    );
+    assert_eq!(
+        s.registry.try_claim_task(&newcomer, &task_id),
+        Err(Ok(KeeperError::LockPeriodActive))
+    );
+}
+
+#[test]
+fn reputation_floor_compares_stored_score_not_decayed_score() {
+    let s = setup_long_lived();
+    let keeper = Address::generate(&s.env);
+    execute_as(&s, &keeper);
+    s.registry.set_reputation_floor(&s.admin, &10_000);
+
+    advance(
+        &s.env,
+        3 * crate::reputation::REPUTATION_DECAY_HALF_LIFE_LEDGERS,
+        0,
+    );
+    assert_eq!(s.registry.effective_reputation(&keeper).score_bps, 1_250);
+
+    let task_id = register_default_task(&s);
+    s.registry.claim_task(&keeper, &task_id);
+    assert_eq!(s.registry.get_task(&task_id).claimer, Some(keeper));
 }

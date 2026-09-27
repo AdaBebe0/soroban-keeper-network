@@ -125,4 +125,16 @@ pub enum KeeperError {
     /// `resolve_execution_dispute` given a `task_id` with no disputed
     /// `PendingCredit` on file (never disputed, or already resolved).
     NoDisputedCredit = 37,
+
+    // ─── E07 — Keeper Reputation ───────────────────────────────────────
+    // New reputation errors go here.
+    /// `claim_task` was called by a keeper whose stored reputation score is
+    /// below the admin-configured floor (see `set_reputation_floor`). Distinct
+    /// from every task-state rejection: the task itself was claimable, just
+    /// not by this keeper. Retrying cannot succeed until the admin lowers the
+    /// floor, since a keeper cannot raise its score without claiming.
+    ReputationBelowFloor = 38,
+    /// `set_reputation_floor` was given a floor above
+    /// [`crate::MAX_REPUTATION_FLOOR_BPS`], a score no keeper can ever reach.
+    InvalidReputationFloor = 39,
 }

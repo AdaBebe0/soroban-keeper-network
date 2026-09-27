@@ -16,7 +16,7 @@ use crate::constants::*;
 use crate::errors::KeeperError;
 use crate::events::*;
 use crate::internal::*;
-use crate::reputation::{record_missed_claim, record_success};
+use crate::reputation::{record_missed_claim, record_success, require_reputation_floor};
 use crate::types::{DataKey, Task, TaskStatus, TaskType};
 use crate::verifier::KeeperVerifierClient;
 use crate::{KeeperRegistry, KeeperRegistryArgs, KeeperRegistryClient};
@@ -206,6 +206,12 @@ impl KeeperRegistry {
     // claimed by anyone; a Claimed task may be re-claimed only after its
     // previous claimer's lock window has elapsed (see `lock_expired`), which
     // stops a keeper from squatting on a task it never intends to execute.
+    //
+    // If the admin has set a reputation floor (`set_reputation_floor`), a
+    // keeper whose stored score is below it is rejected with
+    // `ReputationBelowFloor`. The check runs after the task-state checks, so
+    // that error always means "claimable, but not by you", and before any
+    // write, so a rejected claim records nothing against the previous claimer.
 
     pub fn claim_task(e: Env, keeper: Address, task_id: u64) -> Result<(), KeeperError> {
         require_not_paused(&e)?;
@@ -237,6 +243,7 @@ impl KeeperRegistry {
             }
             _ => return Err(KeeperError::InvalidTaskStatus),
         };
+        require_reputation_floor(&e, &keeper)?;
 
         bump_instance(&e);
         if let Some(missed) = missed_claimer {

@@ -192,3 +192,7 @@ pub const DISPUTE_WINDOW_LEDGERS: u32 = 51_840; // ~3 days
 /// keeper's `PendingReward` entry in the meantime, outlive its own storage
 /// TTL before it is ever finalized.
 pub const MAX_EXECUTION_DISPUTE_WINDOW_LEDGERS: u32 = 86_400; // ~5 days
+
+/// Highest floor `set_reputation_floor` accepts, in basis points: the score of
+/// a keeper with only successes. Any higher floor would lock out every keeper.
+pub const MAX_REPUTATION_FLOOR_BPS: u32 = 10_000;
