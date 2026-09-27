@@ -750,7 +750,7 @@ need the daemon loop to complete a round without a real executor in place.
 
 1. **No on-chain execution verification (MVP)** — The registry trusts the claimer to submit proof. A malicious keeper could claim-and-execute-fake. Phase 2 adds an optional verifier callback.
 2. **Fee sweep is manual** — Protocol fees are batched and swept by admin. In Phase 2 this flows automatically to a staking/treasury contract.
-3. **No slashing (MVP)** — Unresponsive keepers lose their lock but face no economic penalty. Phase 2 introduces staking + slashing.
+3. **No automatic slashing for missed executions** — The staking and slashing requirements are documented in FR-8 through FR-11; unresponsive keepers still lose their lock without an automatic penalty.
 
 ### Security Properties
 
