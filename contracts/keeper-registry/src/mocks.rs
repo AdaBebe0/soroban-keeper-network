@@ -298,17 +298,11 @@ fn reenter(env: &Env) {
                 .instance()
                 .get(&DataKey::TriggerTo)
                 .unwrap();
-            // The reentrant call's own incident id — deliberately the same
-            // fixed value `test_reentrant_token_slash` uses for the outer
-            // call, so a correct CEI ordering (incident recorded before the
-            // token transfer) rejects this as a duplicate.
-            let incident_id = BytesN::from_array(env, &[9u8; 32]);
             match client.try_slash(
                 &admin,
                 &keeper,
                 &100_000i128,
                 &symbol_short!("fraud"),
-                &incident_id,
                 &treasury,
             ) {
                 Ok(_) => (true, NO_ERROR_CODE),

@@ -155,22 +155,13 @@ pub(crate) const TTL_SAFETY_MARGIN_LEDGERS: u32 = 17_280; // ~1 day
 pub const DEFAULT_FEE_BPS: u32 = 0;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// E06 — Keeper Staking & Slashing (see `docs/STAKING_DESIGN.md`)
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// Ledgers a keeper's requested stake withdrawal must wait before
-/// `withdraw_stake` will release it. Matches `TTL_SAFETY_MARGIN_LEDGERS`'s
-/// existing ~1-day precedent — long enough that an admin has a realistic
-/// window to notice misbehavior and call `slash` before the stake that
-/// would back it leaves the contract. See `docs/STAKING_DESIGN.md` §3.
-pub(crate) const UNBOND_DELAY_LEDGERS: u32 = 17_280; // ~1 day
-
 /// Ledgers of persistent-storage lifetime requested for a keeper's stake
 /// entry each time it is written. Mirrors [`KEEPER_BALANCE_BUMP_LEDGERS`].
 pub(crate) const KEEPER_STAKE_BUMP_LEDGERS: u32 = 100_000;
 /// Renew a keeper stake entry only once fewer than this many ledgers
 /// remain. Mirrors [`KEEPER_BALANCE_BUMP_THRESHOLD`].
 pub(crate) const KEEPER_STAKE_BUMP_THRESHOLD: u32 = 50_000;
+
 // Staking (E06) — see docs/STAKING_DESIGN.md
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -189,5 +180,15 @@ pub const UNBOND_DELAY_LEDGERS: u32 = 86_400; // ~5 days
 
 /// Ledgers a slashed keeper has to call `raise_slash_appeal` after a `slash`
 /// before the slash becomes final (~3 days at 5s/ledger). See
-/// docs/STAKING_DESIGN.md §4.
+/// docs/STAKING_DESIGN.md §4.1.
 pub const DISPUTE_WINDOW_LEDGERS: u32 = 51_840; // ~3 days
+
+/// Ceiling `set_dispute_window` enforces on the admin-configured
+/// execution-dispute hold (issue 0293 / #421, docs/STAKING_DESIGN.md §4.2).
+/// Deliberately below [`INSTANCE_BUMP_LEDGERS`]/[`KEEPER_BALANCE_BUMP_LEDGERS`]
+/// for the same reason [`UNBOND_DELAY_LEDGERS`] is bounded below them: a
+/// per-credit hold longer than the storage-TTL renewal window could let a
+/// single pending credit, with no other contract traffic touching that
+/// keeper's `PendingReward` entry in the meantime, outlive its own storage
+/// TTL before it is ever finalized.
+pub const MAX_EXECUTION_DISPUTE_WINDOW_LEDGERS: u32 = 86_400; // ~5 days

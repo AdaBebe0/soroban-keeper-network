@@ -134,4 +134,16 @@ impl KeeperRegistry {
     pub fn get_slash(e: Env, slash_id: u64) -> Option<crate::types::SlashRecord> {
         e.storage().persistent().get(&DataKey::Slash(slash_id))
     }
+    /// Ledgers an execute_task credit is held before it becomes
+    /// withdrawable (0 if unset — disabled). See docs/STAKING_DESIGN.md §4.2.
+    pub fn dispute_window(e: Env) -> u32 {
+        dispute_window_ledgers(&e)
+    }
+    /// Read-only: a keeper's not-yet-finalized execute_task credits.
+    pub fn pending_reward(
+        e: Env,
+        keeper: Address,
+    ) -> soroban_sdk::Vec<crate::types::PendingCredit> {
+        pending_credits_of(&e, &keeper)
+    }
 }
