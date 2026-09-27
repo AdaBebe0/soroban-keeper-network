@@ -426,6 +426,11 @@ value from the `max_batch_size()` view instead of hardcoding it.
 | `SlashAuthority` | `Address` | Instance | Instance lifetime | `Admin` |
 | `Task(u64)` | `Task` struct | Persistent | `task.ttl_ledgers` | — |
 | `KeeperReward(Address)` | `i128` | Persistent | ~1 year (6.3M ledgers) | `0` |
+| `KeeperStake(Address)` | `i128` | Persistent | ~1 year (6.3M ledgers) | `0` |
+| `UnbondRequest(Address)` | `UnbondRequest` struct | Persistent | ~1 year (6.3M ledgers) | — (absent) |
+| `MinStake` | `i128` | Instance | Instance lifetime | `0` (no requirement) |
+| `SlashCounter` | `u64` | Instance | Instance lifetime | `0` |
+| `Slash(u64)` | `SlashRecord` struct | Persistent | ~1 year (6.3M ledgers) | — (removed once resolved) |
 | `Stake(Address)` | `i128` | Persistent | ~1 year (6.3M ledgers) | `0` |
 | `PendingUnbond(Address)` | `PendingUnbond` struct | Persistent | `unbonding_delay` + TTL guard | unset/`0` |
 
@@ -488,6 +493,13 @@ without breaking existing consumers.
 | `AdminTransferred` | `transfer_admin` | `("admin", "xfer")` | `(old_admin: Address, new_admin: Address)` |
 | `FeesSwept` | `sweep_fees` | `("sweep", "admin")` | `(treasury: Address, amount: i128, remaining: i128)` |
 | `Upgraded` | `upgrade` | `("upgrade", "admin")` | `(admin: Address, new_wasm_hash: BytesN<32>)` — emitted before the executable is swapped |
+| `StakeDeposited` | `stake_deposit` | `("stkdep", "stake")` | `(keeper: Address, amount: i128, new_total: i128)` |
+| `UnbondInitiated` | `initiate_unbond` | `("unbond", "stake")` | `(keeper: Address, amount: i128, unlock_ledger: u32)` |
+| `StakeWithdrawn` | `withdraw_stake` | `("stkwd", "stake")` | `(keeper: Address, amount: i128)` |
+| `Slashed` | `slash` | `("slash", "stake")` | `(slash_id: u64, keeper: Address, amount: i128, reason: Symbol)` |
+| `MinStakeUpdated` | `set_min_stake` | `("minstk", "admin")` | `(old_min: i128, new_min: i128)` |
+| `SlashAppealRaised` | `raise_slash_appeal` | `("appeal", "stake")` | `(slash_id: u64, keeper: Address)` |
+| `SlashAppealResolved` | `resolve_slash_appeal` | `("resolve", "stake")` | `(slash_id: u64, upheld: bool)` |
 
 Notes:
 
@@ -498,6 +510,7 @@ Notes:
   not just one.
 - `VerifierAttached` is emitted on `register_task` when an optional verifier is attached, preserving the standard 4-tuple schema of `TaskRegistered` for backwards compatibility with existing event parsers.
 - `VerifierUpdated` follows the `FeeUpdated` / `MinRewardUpdated` before/after pattern with `(task_id, old_verifier, new_verifier)`.
+- `StakeDeposited`/`UnbondInitiated`/`StakeWithdrawn`/`Slashed`/`MinStakeUpdated`/`SlashAppealRaised`/`SlashAppealResolved` are the staking epic's events (E06, `docs/STAKING_DESIGN.md`). `Slashed`'s `reason` is a `Symbol`, not free text — see the design doc for the trust model behind `slash`'s authorization.
 
 #### Task Lifecycle State Machine
 
