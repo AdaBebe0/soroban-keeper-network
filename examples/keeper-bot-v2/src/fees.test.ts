@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { SorobanRpc } from "@stellar/stellar-sdk";
+import { rpc } from "@stellar/stellar-sdk";
 import {
   getAdaptiveFee,
   isOperationProfitable,
@@ -8,19 +8,19 @@ import {
   FeeEstimate,
 } from "./fees";
 
-// Mock SorobanRpc.Server type
+// Mock rpc.Server type
 const createMockServer = (
-  getFeeStatsResponse?: SorobanRpc.Api.GetFeeStatsResponse | null,
+  getFeeStatsResponse?: rpc.Api.GetFeeStatsResponse | null,
   shouldThrow?: boolean,
-): SorobanRpc.Server => {
+): rpc.Server => {
   return {
     getFeeStats: vi.fn(async () => {
       if (shouldThrow) {
         throw new Error("RPC unavailable");
       }
-      return getFeeStatsResponse || ({} as SorobanRpc.Api.GetFeeStatsResponse);
+      return getFeeStatsResponse || ({} as rpc.Api.GetFeeStatsResponse);
     }),
-  } as unknown as SorobanRpc.Server;
+  } as unknown as rpc.Server;
 };
 
 describe("getAdaptiveFee", () => {
@@ -37,7 +37,7 @@ describe("getAdaptiveFee", () => {
         p90: 500,
         p99: 800,
       },
-    } as unknown as SorobanRpc.Api.GetFeeStatsResponse);
+    } as unknown as rpc.Api.GetFeeStatsResponse);
 
     const config: FeeConfig = {
       feeCeilingStroops: 10000,
@@ -62,7 +62,7 @@ describe("getAdaptiveFee", () => {
         p90: 500,
         p99: 800,
       },
-    } as unknown as SorobanRpc.Api.GetFeeStatsResponse);
+    } as unknown as rpc.Api.GetFeeStatsResponse);
 
     const config: FeeConfig = {
       feeCeilingStroops: 10000,
@@ -88,7 +88,7 @@ describe("getAdaptiveFee", () => {
         p90: 15000,
         p99: 20000,
       },
-    } as unknown as SorobanRpc.Api.GetFeeStatsResponse);
+    } as unknown as rpc.Api.GetFeeStatsResponse);
 
     const config: FeeConfig = {
       feeCeilingStroops: 10000,
@@ -129,7 +129,7 @@ describe("getAdaptiveFee", () => {
         // p90 is missing
         p99: 800,
       },
-    } as unknown as SorobanRpc.Api.GetFeeStatsResponse);
+    } as unknown as rpc.Api.GetFeeStatsResponse);
 
     const config: FeeConfig = {
       feeCeilingStroops: 10000,
@@ -152,7 +152,7 @@ describe("getAdaptiveFee", () => {
         p90: 50,
         p99: 80,
       },
-    } as unknown as SorobanRpc.Api.GetFeeStatsResponse);
+    } as unknown as rpc.Api.GetFeeStatsResponse);
 
     const config: FeeConfig = {
       feeCeilingStroops: 10000,
@@ -175,7 +175,7 @@ describe("getAdaptiveFee", () => {
         p90: 500,
         p99: 800,
       },
-    } as unknown as SorobanRpc.Api.GetFeeStatsResponse);
+    } as unknown as rpc.Api.GetFeeStatsResponse);
 
     const config: FeeConfig = {
       feeCeilingStroops: 50, // Below BASE_FEE
@@ -196,7 +196,7 @@ describe("getAdaptiveFee", () => {
         p90: 500,
         p99: 800,
       },
-    } as unknown as SorobanRpc.Api.GetFeeStatsResponse);
+    } as unknown as rpc.Api.GetFeeStatsResponse);
 
     const config: FeeConfig = {
       feeCeilingStroops: 10000,
@@ -218,7 +218,7 @@ describe("getAdaptiveFee", () => {
         p90: 500,
         p99: 800,
       },
-    } as unknown as SorobanRpc.Api.GetFeeStatsResponse);
+    } as unknown as rpc.Api.GetFeeStatsResponse);
 
     const config: FeeConfig = {
       feeCeilingStroops: 10000,
@@ -241,7 +241,7 @@ describe("getAdaptiveFee", () => {
         p90: 980000,
         p99: 1000000,
       },
-    } as unknown as SorobanRpc.Api.GetFeeStatsResponse);
+    } as unknown as rpc.Api.GetFeeStatsResponse);
 
     const config: FeeConfig = {
       feeCeilingStroops: 10000, // Operator's hard limit
@@ -264,7 +264,7 @@ describe("getAdaptiveFee", () => {
         p90: 5000,
         p99: 8000,
       },
-    } as unknown as SorobanRpc.Api.GetFeeStatsResponse);
+    } as unknown as rpc.Api.GetFeeStatsResponse);
 
     const config: FeeConfig = {
       feeCeilingStroops: 10000,

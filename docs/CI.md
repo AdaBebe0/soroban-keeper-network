@@ -9,23 +9,25 @@ without blocking your PR.
 |-----|------|-----|
 | `format` | Required | `cargo fmt --all -- --check` — a formatting diff is trivially fixable and shouldn't need discussion. |
 | `test` | Required | `cargo test --workspace --locked` — the test suite is the correctness bar. |
-| `build-wasm` | Required | The `keeper-registry` and `treasury` contracts must actually compile to the `wasm32-unknown-unknown` target they deploy to. |
+| `build-wasm` | Required | The `keeper-registry` and `keeper-treasury` contracts must actually compile to the `wasm32-unknown-unknown` target they deploy to. |
 | `sdk-ts` | Required | The TypeScript SDK (`packages/sdk-ts`) must typecheck (`tsc --noEmit`), build, and pass its own test suite. Uploads its built `dist/` as an artifact for `bot` to consume. Lint is the advisory `sdk-ts-lint` job. See [SDK typecheck and lint](#sdk-typecheck-and-lint). |
 | `bot` | Required | The example keeper bot (`examples/keeper-bot`) must lint, syntax-check, and pass its own test suite. Depends on `sdk-ts`'s built output (the bot's `@soroban-keeper-network/sdk` dependency is a local `file:` reference, which `npm install` copies as-is rather than building). |
 | `bot-v2` | Required | The production keeper bot v2 (`examples/keeper-bot-v2`) must build, lint, and pass its test suite against an ephemeral Postgres service container. See [The keeper-bot-v2 job](#the-keeper-bot-v2-job). |
 | `indexer` | Required | The indexer service (`indexer/`) must format, build, and pass its test suite, including the database-backed tests. See [The indexer job](#the-indexer-job). |
 | `rust-sdk` | Required | The Rust SDK crate (`rust-sdk/`) must compile and pass all unit and integration tests. |
+| `indexer-client` | Required | The indexer's TypeScript client (`packages/indexer-client`) must typecheck, build, test and lint, and its generated types must match `indexer/openapi.yaml`. |
 | `clippy` | Advisory (`continue-on-error: true`) | Lints are useful but subjective enough that a maintainer should decide case-by-case, not have every PR blocked by a new upstream lint. |
 | `audit` | Advisory (`continue-on-error: true`) | A new upstream dependency CVE should notify maintainers, not fail every open PR the moment it's published. |
 | `wasm-size` | Advisory (`continue-on-error: true`) | Reports binary size for visibility; see below. |
 | `sdk-ts-lint` | Advisory (`continue-on-error: true`) | `npm run lint` (ESLint) on `packages/sdk-ts`. Lint findings are subjective enough that a maintainer should decide case-by-case, the same reasoning as `clippy`. See [SDK typecheck and lint](#sdk-typecheck-and-lint). |
-| `wasm-size` | Advisory (`continue-on-error: true`) | Reports contract binary size for visibility; see below. |
 | `sdk-bundle-size` | Advisory (`continue-on-error: true`) | Reports the SDK's minified+gzipped bundle size for visibility — the frontend analogue of `wasm-size`; see below. |
+| `sdk-ts-docs` | Advisory (`continue-on-error: true`) | `npm run docs:check` (TypeDoc) on `packages/sdk-ts`; reports exported symbols missing a doc comment in the job summary. |
+| `fuzz-pr` | Advisory (`continue-on-error: true`) | A short fuzz run on PRs touching `contracts/keeper-registry/` or `fuzz/`; `fuzz-nightly.yml` is the longer counterpart. |
+| `resource-cost` | Advisory (`continue-on-error: true`) | Reports CPU instructions and memory per state-changing entry point against a checked-in baseline. |
 
 `ci-required` is the single check branch protection should require — it
-passes only when `format`, `test`, `build-wasm`, `sdk-ts`, `bot`, `bot-v2`, `indexer`, and `rust-sdk` all
-succeed, and ignores the advisory jobs' outcomes entirely.
-
+passes only when `format`, `test`, `build-wasm`, `sdk-ts`, `bot`, `bot-v2`, `indexer`, `rust-sdk`, and
+`indexer-client` all succeed, and ignores the advisory jobs' outcomes entirely.
 
 Run every required check locally before opening a PR:
 
@@ -65,7 +67,7 @@ make sdk-ts-lint   # ESLint (advisory)
 
 ## The keeper-bot-v2 job
 
-The `bot-v2` job covers `examples/keeper-bot-v2`: TypeScript compilation (`npm run build`), linting (`npm run lint`), and its automated test suite (`npm test`).
+The `bot-v2` job covers `examples/keeper-bot-v2`: TypeScript compilation (`npm run build`), linting (`npm run lint`), and its test suites (`npm test`: vitest for the TypeScript service in `src/`, then `node --test` for the CommonJS components in `bot/`).
 
 It runs on PRs touching `examples/keeper-bot-v2/`, `packages/sdk-ts/` (which it depends on via a built distribution artifact), or the CI workflow manifest `.github/workflows/ci.yml`. PRs touching only contract or indexer code skip the work while reporting success, allowing `bot-v2` to remain a required gate in `ci-required`.
 

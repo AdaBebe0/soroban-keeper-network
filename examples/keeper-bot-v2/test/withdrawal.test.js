@@ -8,7 +8,7 @@ const {
   FixedScheduleStrategy,
   FeeAwareThresholdStrategy,
   WithdrawalManager,
-} = require("../src/withdrawal.js");
+} = require("../bot/withdrawal.js");
 
 describe("Pluggable Withdrawal Strategy (Issue #400)", () => {
   describe("FixedThresholdStrategy (v1 default parity)", () => {

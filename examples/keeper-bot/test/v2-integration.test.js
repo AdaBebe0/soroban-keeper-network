@@ -542,7 +542,6 @@ test("integration: profitability skipping is logged distinctly", async () => {
 });
 
 test("integration: evaluation pipeline is consistent", async () => {
-  const state = new PersistentStateStore();
   const profitability = new ProfitabilityEvaluator({
     claimFee: 10_000n,
     executeFee: 50_000n,

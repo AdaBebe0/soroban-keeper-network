@@ -6,8 +6,8 @@ const {
   runKeeperRound,
   ESTIMATED_CLAIM_FEE_STROOPS,
   ESTIMATED_EXECUTE_BASE_FEE_STROOPS,
-} = require("../src/loop.js");
-const { MetricsCollector } = require("../src/metrics.js");
+} = require("../bot/loop.js");
+const { MetricsCollector } = require("../bot/metrics.js");
 
 function createMockClient() {
   const claims = [];

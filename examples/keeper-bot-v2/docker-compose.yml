@@ -76,8 +76,8 @@ services:
   # Keeper Bot v2 application service
   keeper-bot:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ../..
+      dockerfile: examples/keeper-bot-v2/Dockerfile
     container_name: keeper-bot-v2
     depends_on:
       # Ensure database is healthy before starting the bot.

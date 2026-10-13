@@ -20,9 +20,7 @@
 
 const { describe, it, beforeEach } = require("node:test");
 const assert = require("node:assert");
-const { nativeToScVal, xdr } = require("@stellar/stellar-sdk");
 const {
-  evaluateCandidateBatch,
   TASK_TYPE_NAMES,
   ESTIMATED_CLAIM_FEE_STROOPS,
   ESTIMATED_EXECUTE_BASE_FEE_STROOPS,
@@ -47,7 +45,7 @@ class MockRpcServer {
     };
   }
 
-  async simulateTransaction(tx) {
+  async simulateTransaction(_tx) {
     // Returns a mock simulation result
     return {
       results: [],
@@ -120,40 +118,6 @@ function createFullTask(taskId, taskType, taskTypeName, reward, hasVerifier = fa
     verifier: hasVerifier ? "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM" : null,
     status: 0, // Pending
   };
-}
-
-/**
- * Mock implementation of readContract for testing
- * Simulates fetching task details via get_task
- */
-async function mockReadContract(server, publicKey, networkPassphrase, contractId, method, args) {
-  if (method === "get_task" && args.length > 0) {
-    // Extract taskId from nativeToScVal argument
-    // In real code this would decode the XDR, but for tests we'll extract from our mock map
-    const taskId = Array.from(server.tasks.keys())[0] || 1;
-    const taskData = server.tasks.get(taskId);
-    if (taskData) {
-      // Return first task in mock
-      const firstKey = Array.from(server.tasks.keys())[0];
-      return server.tasks.get(firstKey);
-    }
-  }
-  return null;
-}
-
-/**
- * Mock implementation of executeTaskOffChain for testing
- * Returns a synthetic proof
- */
-async function mockExecuteTaskOffChain(task, ctx, simulateExecution) {
-  if (simulateExecution) {
-    return Buffer.from(`mock-proof:task:${task.taskId}`);
-  }
-  // Simulate TtlExtension executor
-  if (task.taskTypeName === "TtlExtension") {
-    return Buffer.from(`ttl-proof:${task.taskId}`);
-  }
-  return null;
 }
 
 /**
@@ -258,7 +222,6 @@ describe("evaluateCandidateBatch - issue #0270", () => {
       // should use the same profitability formula.
 
       const taskReward = 200_000n; // 0.02 XLM
-      const baseFees = ESTIMATED_CLAIM_FEE_STROOPS + ESTIMATED_EXECUTE_BASE_FEE_STROOPS;
 
       const profitCheckBatched = mockProfitabilityCheck(taskReward, 0n);
       const profitCheckIndividual = mockProfitabilityCheck(taskReward, 0n);

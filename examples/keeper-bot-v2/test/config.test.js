@@ -31,7 +31,7 @@ const {
   _valuesEqual,
   _safeDisplayValue,
   reloadConfig,
-} = require("../src/config.js");
+} = require("../bot/config.js");
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers

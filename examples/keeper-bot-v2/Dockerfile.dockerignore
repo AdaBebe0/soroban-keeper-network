@@ -1,0 +1,7 @@
+# Build context is the repository root; ship only what the image needs.
+**/node_modules
+**/dist
+**/.env
+**/.env.*
+target
+.git

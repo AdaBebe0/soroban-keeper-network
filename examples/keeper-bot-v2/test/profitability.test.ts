@@ -15,7 +15,8 @@ import {
   getExpectedNetProfit,
   isProfitable,
 } from "../src/profitability.js";
-import type { EvaluatedCandidate, ProfitabilityConfig } from "../src/types.js";
+import type { EvaluatedCandidate } from "../src/types.js";
+import type { ProfitabilityConfig } from "../src/profitability.js";
 
 /**
  * Helper: Create an EvaluatedCandidate for testing

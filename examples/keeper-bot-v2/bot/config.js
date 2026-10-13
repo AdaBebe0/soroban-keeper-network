@@ -28,6 +28,8 @@
 
 "use strict";
 
+require("dotenv").config();
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Reload behaviour constants
 // ─────────────────────────────────────────────────────────────────────────────
@@ -500,7 +502,7 @@ async function reloadConfig(config, _resolvers) {
         secret: entry.secret,
         fallback: effectiveFallback,
       });
-    } catch (_e) {
+    } catch {
       // If the restart-required value is now invalid, log it but do not abort
       // the reload — hot-reloadable values have already been validated clean.
       // The operator must restart with a corrected value.
@@ -620,27 +622,8 @@ function restartRequiredKeys() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Exports
+// Simple loader used by bot/index.js
 // ─────────────────────────────────────────────────────────────────────────────
-
-module.exports = {
-  // Core API
-  validateAndLoadConfig,
-  reloadConfig,
-  // Schema introspection
-  CONFIG_SCHEMA,
-  HOT_RELOADABLE,
-  RESTART_REQUIRED,
-  hotReloadableKeys,
-  restartRequiredKeys,
-  // Exposed for testing — not part of the public operational API
-  readEnv,
-  ConfigValidationError,
-  _valuesEqual,
-  _safeDisplayValue,
-"use strict";
-
-require("dotenv").config();
 
 function parseEnv(name, { parse, validate, fallback, required = false }) {
   const raw = process.env[name];
@@ -702,6 +685,24 @@ function loadConfig() {
   };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Exports
+// ─────────────────────────────────────────────────────────────────────────────
+
 module.exports = {
+  // Core API
+  validateAndLoadConfig,
+  reloadConfig,
+  // Schema introspection
+  CONFIG_SCHEMA,
+  HOT_RELOADABLE,
+  RESTART_REQUIRED,
+  hotReloadableKeys,
+  restartRequiredKeys,
+  // Exposed for testing — not part of the public operational API
+  readEnv,
+  ConfigValidationError,
+  _valuesEqual,
+  _safeDisplayValue,
   loadConfig,
 };

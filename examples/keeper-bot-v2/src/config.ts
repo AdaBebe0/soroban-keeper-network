@@ -1,4 +1,5 @@
-import { FeeConfig } from "./fees";
+import { StrKey } from "@stellar/stellar-sdk";
+import type { FeeConfig } from "./fees.js";
 
 /**
  * Configuration for keeper-bot-v2 fee adaptation.
@@ -53,7 +54,30 @@ export function loadFeeConfig(): KeeperConfig {
   if (isNaN(feeMultiplier) || feeMultiplier <= 0) {
     throw new Error(
       `Invalid FEE_MULTIPLIER: "${process.env.FEE_MULTIPLIER}" must be a positive number`,
-import { StrKey } from "@stellar/stellar-sdk";
+    );
+  }
+
+  return {
+    feeCeilingStroops,
+    feePercentile,
+    feeMultiplier,
+  };
+}
+
+/**
+ * Converts KeeperConfig to FeeConfig for use with getAdaptiveFee().
+ * This is a simple wrapper that ensures type compatibility.
+ *
+ * @param config - Keeper configuration
+ * @returns Fee configuration for the adaptive fee module
+ */
+export function toFeeConfig(config: KeeperConfig): FeeConfig {
+  return {
+    feeCeilingStroops: config.feeCeilingStroops,
+    feePercentile: config.feePercentile,
+    feeMultiplier: config.feeMultiplier,
+  };
+}
 
 export class ConfigValidationError extends Error {
   public readonly field?: string;
@@ -339,25 +363,6 @@ export function validateConfig(rawEnv: Record<string, string | undefined> = proc
   }
 
   return {
-    feeCeilingStroops,
-    feePercentile,
-    feeMultiplier,
-  };
-}
-
-/**
- * Converts KeeperConfig to FeeConfig for use with getAdaptiveFee().
- * This is a simple wrapper that ensures type compatibility.
- *
- * @param config - Keeper configuration
- * @returns Fee configuration for the adaptive fee module
- */
-export function toFeeConfig(config: KeeperConfig): FeeConfig {
-  return {
-    feeCeilingStroops: config.feeCeilingStroops,
-    feePercentile: config.feePercentile,
-    feeMultiplier: config.feeMultiplier,
-  };
     network,
     registryContractId,
     signingKeys,

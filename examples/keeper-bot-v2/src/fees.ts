@@ -1,4 +1,4 @@
-import { SorobanRpc } from "@stellar/stellar-sdk";
+import { rpc } from "@stellar/stellar-sdk";
 
 /**
  * Adaptive fee module for keeper-bot-v2.
@@ -66,7 +66,7 @@ export interface FeeEstimate {
  * @returns Fee estimate with the recommended fee and diagnostic metadata
  */
 export async function getAdaptiveFee(
-  server: SorobanRpc.Server,
+  server: rpc.Server,
   config: FeeConfig,
 ): Promise<FeeEstimate> {
   const { feeCeilingStroops, feePercentile = "p90", feeMultiplier = 1.0 } = config;
@@ -78,7 +78,7 @@ export async function getAdaptiveFee(
     );
   }
 
-  let feeStats: SorobanRpc.Api.GetFeeStatsResponse | null = null;
+  let feeStats: rpc.Api.GetFeeStatsResponse | null = null;
 
   try {
     feeStats = await server.getFeeStats();
@@ -100,7 +100,7 @@ export async function getAdaptiveFee(
     return {
       recommendedFee: BASE_FEE,
       adaptedFromNetwork: false,
-      networkFeeRaw,
+      networkFeeRaw: networkFeeRaw ?? undefined,
       ceilingApplied: false,
     };
   }
@@ -118,7 +118,8 @@ export async function getAdaptiveFee(
 
   return {
     recommendedFee,
-    adaptedFromNetwork: true,
+    // A network fee below BASE_FEE is floored, i.e. we fell back to BASE_FEE.
+    adaptedFromNetwork: withMultiplier >= BASE_FEE,
     networkFeeRaw,
     ceilingApplied,
   };
@@ -128,12 +129,12 @@ export async function getAdaptiveFee(
  * Extracts a specific percentile fee from Soroban RPC fee stats.
  */
 function extractPercentileFee(
-  feeStats: SorobanRpc.Api.GetFeeStatsResponse,
+  feeStats: rpc.Api.GetFeeStatsResponse,
   percentile: "p10" | "p50" | "p90" | "p99",
 ): number | null {
   try {
     // getFeeStats returns sorobanInclusionFee with percentile fields
-    const sorobanFee = (feeStats as Record<string, unknown>).sorobanInclusionFee as
+    const sorobanFee = (feeStats as unknown as Record<string, unknown>).sorobanInclusionFee as
       | Record<string, unknown>
       | undefined;
 

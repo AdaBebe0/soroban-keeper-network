@@ -206,7 +206,8 @@ describe("large candidate sets", () => {
       // Should select top 50 by profit
       const topIds = selected.map((c) => c.taskId);
       expect(topIds).toContain(1000n);
-      expect(topIds).not.toContain(951n); // Below top 50
+      expect(topIds).toContain(951n); // 50th-highest profit
+      expect(topIds).not.toContain(950n); // 51st, just below the cut
     });
 
     it("budget equal to candidate count selects all", () => {
@@ -266,9 +267,6 @@ describe("large candidate sets", () => {
       const config = createConfig();
 
       const ranked = rankCandidatesByProfit(candidates, config);
-      const profitable = ranked.filter((c) => c.profitable);
-      const unprofitable = ranked.filter((c) => !c.profitable);
-
       // All profitable should come before unprofitable (due to descending sort)
       const lastProfitableIdx = ranked.findIndex((c) => !c.profitable);
       const firstUnprofitableIdx = lastProfitableIdx;

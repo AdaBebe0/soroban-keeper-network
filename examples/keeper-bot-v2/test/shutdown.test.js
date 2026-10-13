@@ -2,7 +2,7 @@
 
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
-const { ShutdownCoordinator } = require("../src/shutdown.js");
+const { ShutdownCoordinator } = require("../bot/shutdown.js");
 
 const silentLogger = {
   log: () => {},

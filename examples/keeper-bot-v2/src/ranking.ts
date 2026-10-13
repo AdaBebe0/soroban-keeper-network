@@ -8,7 +8,7 @@
  */
 
 import type { EvaluatedCandidate, RankedCandidate } from "./types.js";
-import { estimateTaskProfitability, getExpectedNetProfit } from "./profitability.js";
+import { estimateTaskProfitability } from "./profitability.js";
 import type { ProfitabilityConfig } from "./profitability.js";
 
 /**
@@ -83,7 +83,7 @@ export function selectTopCandidates(
   rankedCandidates: RankedCandidate[],
   maxTasksPerRound: number
 ): RankedCandidate[] {
-  return rankedCandidates.slice(0, Math.min(maxTasksPerRound, rankedCandidates.length));
+  return rankedCandidates.slice(0, Math.max(0, Math.min(maxTasksPerRound, rankedCandidates.length)));
 }
 
 /**

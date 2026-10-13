@@ -137,8 +137,6 @@ describe("arrival order independence", () => {
       ];
 
       // Scenario 2: Candidates added incrementally
-      const incremental1 = [createCandidate(2n, 500_000n)];
-      const incremental2 = [createCandidate(2n, 500_000n), createCandidate(1n, 100_000n)];
       const incremental3 = [
         createCandidate(2n, 500_000n),
         createCandidate(1n, 100_000n),

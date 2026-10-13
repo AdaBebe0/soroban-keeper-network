@@ -324,10 +324,10 @@ jobs:
         with:
           node-version: 20
 
-      - name: npm install
+      - name: Install dependencies
         if: steps.changes.outputs.relevant == 'true'
         working-directory: packages/sdk-ts
-        run: npm install
+        run: npm ci --no-audit --no-fund
 
       - name: Generate reference and check for doc-comment regressions
         if: steps.changes.outputs.relevant == 'true'

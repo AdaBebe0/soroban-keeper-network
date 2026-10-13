@@ -5,7 +5,7 @@ const assert = require("node:assert/strict");
 const {
   computeUnlockLedger,
   LockWindowScheduler,
-} = require("../src/scheduling.js");
+} = require("../bot/scheduling.js");
 
 const silentLogger = {
   log: () => {},

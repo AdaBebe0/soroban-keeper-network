@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   AlertManager,
   AlertPayload,
@@ -790,7 +790,6 @@ describe("createAlertManager", () => {
   });
 
   it("adds MissedExecutionRule when missedExecution config is provided", async () => {
-    const transport = new MockTransport();
     const config = {
       webhook: { url: "https://example.com/alerts" },
       missedExecution: { lockWindowMs: 10000 },
@@ -842,7 +841,6 @@ describe("createAlertManager", () => {
   });
 
   it("includes all three rules when fully configured", async () => {
-    const transport = new MockTransport();
     const config = {
       webhook: { url: "https://example.com/alerts" },
       missedExecution: { lockWindowMs: 10000 },

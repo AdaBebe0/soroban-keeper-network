@@ -2,8 +2,8 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
-const { runKeeperRound } = require("../src/loop.js");
-const { MetricsCollector } = require("../src/metrics.js");
+const { runKeeperRound } = require("../bot/loop.js");
+const { MetricsCollector } = require("../bot/metrics.js");
 
 const RPC_LATENCY_MS = 15;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

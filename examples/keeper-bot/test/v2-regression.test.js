@@ -367,12 +367,6 @@ test("regression: cache independence between evaluators", async () => {
     deadline: Math.floor(Date.now() / 1000) + 3600,
   };
 
-  const task2 = {
-    taskId: "task-2",
-    reward: 100_000n,
-    deadline: Math.floor(Date.now() / 1000) + 3600,
-  };
-
   // eval1 processes task-1 and caches it
   await eval1.evaluateTask(task1);
   eval1.recordOutcome(task1.taskId, "executed");

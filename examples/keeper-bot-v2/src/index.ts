@@ -146,7 +146,7 @@ export class KeeperBotV2 {
 }
 
 // CLI launcher if executed directly
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (require.main === module) {
   try {
     const config = validateConfig(process.env);
     const bot = new KeeperBotV2(config);

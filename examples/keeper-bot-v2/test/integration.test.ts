@@ -9,7 +9,7 @@ import { describe, it, expect } from "vitest";
 import { rankCandidatesByProfit, selectTopCandidates } from "../src/ranking.js";
 import { evaluateAndRankCandidates } from "../src/loop.js";
 import { estimateTaskProfitability } from "../src/profitability.js";
-import type { EvaluatedCandidate, RankedCandidate } from "../src/types.js";
+import type { EvaluatedCandidate } from "../src/types.js";
 import type { ProfitabilityConfig } from "../src/profitability.js";
 
 /**

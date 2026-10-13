@@ -1,4 +1,4 @@
-import { describe, it, before, after } from "node:test";
+import { describe, it, beforeAll, afterAll } from "vitest";
 import assert from "node:assert";
 import { DatabaseClient } from "../src/db/client.js";
 import { TaskStateStore } from "../src/db/store.js";
@@ -17,13 +17,13 @@ describe("Keeper Bot v2 Database Persistent Store (PostgreSQL)", () => {
   let dbClient: DatabaseClient;
   let store: TaskStateStore;
 
-  before(async () => {
+  beforeAll(async () => {
     dbClient = new DatabaseClient(dbUrl);
     store = new TaskStateStore(dbClient);
     await store.init();
   });
 
-  after(async () => {
+  afterAll(async () => {
     if (dbClient) {
       // Clean up test records
       try {

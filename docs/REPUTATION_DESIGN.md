@@ -93,23 +93,23 @@ it avoids the ordering problem described above.
   but not by you." A rejected takeover also records no missed claim against
   the previous claimer.
 
-# Reputation Design (E07)
+## Reputation Design (E07)
 
 This document pins the contract-level design for on-chain keeper reputation before implementation starts. It answers the core questions for E07, states explicit tradeoffs, and names any dependency on the staking work in E06.
 
-## Status
+### Status
 
 This is a design doc, not an implementation plan. It defines the stable contract surface the first reputation build should satisfy and the explicit assumptions that future work can rely on.
 
-## 1. Context
+### 1. Context
 
 The current registry has no on-chain memory of a keeper's track record beyond the task state itself. A keeper can claim any claimable task, and the protocol treats each claim as independent. That makes task selection efficient but leaves the network without any durable signal for quality, reliability, or risk.
 
 This epic introduces a reputation system that the contract itself can read when deciding how to order or gate keeper participation.
 
-## 2. Design decisions
+### 2. Design decisions
 
-### 2.1 What reputation tracks
+#### 2.1 What reputation tracks
 
 The first reputation model tracks the following signals:
 
@@ -120,7 +120,7 @@ The first reputation model tracks the following signals:
 
 The score is intentionally not a generic “social trust” score. It is a narrow, auditable ledger of keeper reliability in the task lifecycle.
 
-#### Rationale
+##### Rationale
 
 This keeps the signal anchored to contract-observable events rather than subjective metadata. A task lifecycle already has concrete, on-chain facts:
 
@@ -130,7 +130,7 @@ This keeps the signal anchored to contract-observable events rather than subject
 
 Each of these is measurable from state transitions and the event log, which makes the score reproducible and auditable.
 
-### 2.2 Scoring model
+#### 2.2 Scoring model
 
 The base score is a signed integer accumulator, represented as a per-keeper record in contract storage:
 
@@ -151,7 +151,7 @@ The design chooses incremental updates over on-demand recomputation for the firs
 - it is simpler to keep within Soroban storage and TTL constraints;
 - it gives off-chain consumers a single, stable view of current reputation without forcing a full replay.
 
-#### Rationale against full-history recomputation
+##### Rationale against full-history recomputation
 
 A full-history model would require either:
 
@@ -160,7 +160,7 @@ A full-history model would require either:
 
 That is operationally costly, harder to keep bounded, and couples a simple on-chain primitive to an expensive read pattern. The contract should keep reputation as a compact state record, with events remaining the canonical audit trail.
 
-### 2.3 Decay
+#### 2.3 Decay
 
 The first version uses a bounded, simple decay policy:
 
@@ -181,11 +181,11 @@ For example:
 
 This prevents a single ancient failure from permanently defining a keeper's trustworthiness and makes the score responsive to current behavior.
 
-#### Rationale
+##### Rationale
 
 Without decay, reputation becomes a permanent historical ledger that penalizes a keeper forever, even after long periods of reliable service. That is too rigid for a network where keepers may go offline, temporarily fail, or re-enter after a long absence.
 
-### 2.4 What reputation gates or influences
+#### 2.4 What reputation gates or influences
 
 This epic does not gate core task execution with a hard reputation ban in the first version.
 
@@ -197,7 +197,7 @@ The first available decisions are:
 
 The design chooses a conservative option: a read-only view and a configurable claim-priority or eligibility hook, but no hard ban by default.
 
-#### Preferred initial surface
+##### Preferred initial surface
 
 - `reputation(keeper) -> i128` read-only view
 - `set_reputation_floor` admin-configurable eligibility threshold, if the project wants a floor
@@ -205,7 +205,7 @@ The design chooses a conservative option: a read-only view and a configurable cl
 
 This design keeps the reputation primitive usable without forcing an immediate network-wide policy decision about claim access.
 
-### 2.5 Dependency on epic E06 staking
+#### 2.5 Dependency on epic E06 staking
 
 The design is intentionally explicit about the dependency:
 
@@ -215,7 +215,7 @@ The design is intentionally explicit about the dependency:
 
 The key rule is: do not tie reputation to slash semantics unless E06 is already part of the executed surface. If E06 has not landed, the score can still be stored and read; it simply does not include slash-based adjustments yet.
 
-## 3. Storage model
+### 3. Storage model
 
 The following storage keys are the proposed stable surface prior to implementation.
 
@@ -229,11 +229,11 @@ The following storage keys are the proposed stable surface prior to implementati
 
 This separates the current score from its last update time and makes the decay function deterministic. It also keeps the configuration keys at instance scope to avoid duplicating per-keeper metadata in the hot path.
 
-## 4. Stable entry points and views
+### 4. Stable entry points and views
 
 The first design should pin the following signatures before implementation begins.
 
-### 4.1 Admin-configurable hooks
+#### 4.1 Admin-configurable hooks
 
 - `set_reputation_decay_rate(rate)`
 - `set_reputation_floor(floor)`
@@ -241,12 +241,12 @@ The first design should pin the following signatures before implementation begin
 
 These are admin-controlled because they change the network's quality gate or scoring policy. The exact values should be small, conservative, and auditable.
 
-### 4.2 Keeper-facing views
+#### 4.2 Keeper-facing views
 
 - `reputation(keeper: Address) -> i128`
 - `reputation_ready_for_claim(keeper: Address) -> bool` (optional; only if a floor is enforced)
 
-### 4.3 Internal update path
+#### 4.3 Internal update path
 
 The contract should have internal helpers such as:
 
@@ -256,7 +256,7 @@ The contract should have internal helpers such as:
 
 Those helpers are not public ABI surface; they are the internal transition functions that the task lifecycle and staking logic call when relevant events occur.
 
-## 5. Why this design is the right first step
+### 5. Why this design is the right first step
 
 This is a deliberately small and auditable model:
 
@@ -267,7 +267,7 @@ This is a deliberately small and auditable model:
 
 The key design principle is: reputation should be a durable, on-chain signal, not a speculative one-off heuristic.
 
-## 6. Explicit non-goals
+### 6. Explicit non-goals
 
 This doc does not define:
 
@@ -278,7 +278,7 @@ This doc does not define:
 
 Those are future epics and must be added only once the base reputation primitive is stabilized.
 
-## 7. Implementation boundary
+### 7. Implementation boundary
 
 The implementation should not begin until the following are fixed in the design review:
 

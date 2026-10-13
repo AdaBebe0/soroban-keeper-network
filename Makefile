@@ -1,12 +1,9 @@
 # Soroban Keeper Network — common developer commands.
 # Run `make help` for the list.
 #
-# IMPORTANT: The `ci` target must remain synchronized with the required CI jobs
-# defined in .github/workflows/ci.yml (format, test, build-wasm, sdk-ts, bot,
-# indexer — this comment previously listed only the first three, already out
-# of sync with `bot` having been required in CI before this file was touched;
-# `sdk-ts`, `indexer`, and that pre-existing gap are all reflected here now).
-# If CI workflow changes, update this Makefile accordingly, and vice versa.
+# IMPORTANT: The `ci` target must stay in sync with the required jobs in
+# .github/workflows/ci.yml (format, test, build-wasm, sdk-ts, bot, bot-v2,
+# indexer, rust-sdk, indexer-client). Change one, change the other.
 
 WASM := target/wasm32-unknown-unknown/release/keeper_registry.wasm
 
@@ -16,7 +13,7 @@ WASM := target/wasm32-unknown-unknown/release/keeper_registry.wasm
 #   make indexer INDEXER_TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/indexer_test
 INDEXER_TEST_DATABASE_URL ?=
 
-.PHONY: help build test fmt fmt-check lint wasm optimize clean bot bot-test bot-v2-test sdk-ts sdk-ts-lint indexer ci check
+.PHONY: help build test fmt fmt-check lint wasm optimize clean bot bot-test bot-v2-test sdk-ts sdk-ts-lint indexer rust-sdk indexer-client ci check
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -37,8 +34,9 @@ fmt-check: ## Check formatting (matches CI)
 lint: ## Run clippy with warnings denied (stricter than CI)
 	cargo clippy --all-targets -- -D warnings
 
-wasm: ## Build the release WASM contract (matches CI)
+wasm: ## Build the release WASM contracts (matches CI)
 	cargo build --locked --release --target wasm32-unknown-unknown --package keeper-registry
+	cargo build --locked --release --target wasm32-unknown-unknown --package keeper-treasury
 
 optimize: wasm ## Build and optimize the WASM for deployment
 	stellar contract optimize --wasm $(WASM)
@@ -53,20 +51,26 @@ indexer: ## Format-check, build and test the indexer (matches CI)
 		cargo test --package keeper-indexer --locked
 
 sdk-ts: ## Typecheck, build and test the TypeScript SDK (matches the required CI job)
-	cd packages/sdk-ts && npm install --no-audit --no-fund && npx tsc --noEmit -p tsconfig.json && npm run build && npm test
+	cd packages/sdk-ts && npm ci --no-audit --no-fund && npx tsc --noEmit -p tsconfig.json && npm run build && npm test
 
 sdk-ts-lint: ## ESLint the TypeScript SDK (advisory in CI, so not part of `make ci`)
-	cd packages/sdk-ts && npm install --no-audit --no-fund && npm run lint
+	cd packages/sdk-ts && npm ci --no-audit --no-fund && npm run lint
 
 bot-test: sdk-ts ## Build the SDK then run the keeper bot's tests (matches CI) — bot depends on sdk-ts's dist/ output
-	cd examples/keeper-bot && npm install --no-audit --no-fund && npm test && npm run lint
+	cd examples/keeper-bot && npm ci --no-audit --no-fund && npm test && npm run lint
 
 bot-v2-test: sdk-ts ## Build the SDK then build, test and lint keeper-bot-v2 (matches CI)
-	cd examples/keeper-bot-v2 && npm install --no-audit --no-fund && npm run build && npm test && npm run lint
+	cd examples/keeper-bot-v2 && npm ci --no-audit --no-fund && npm run build && npm test && npm run lint
+
+rust-sdk: ## Test the Rust SDK crate (matches CI)
+	cargo test --package soroban-keeper-sdk --locked
+
+indexer-client: ## Typecheck, build, test and lint the indexer client (matches CI)
+	cd packages/indexer-client && npm ci --no-audit --no-fund && npx tsc --noEmit -p tsconfig.json && npm run build && npm test && npm run lint
 
 clean: ## Remove build artifacts
 	cargo clean
 
-ci: fmt-check test wasm sdk-ts bot-test bot-v2-test indexer ## Run all required CI checks locally (blocking checks only)
+ci: fmt-check test wasm sdk-ts bot-test bot-v2-test indexer rust-sdk indexer-client ## Run all required CI checks locally (blocking checks only)
 
 check: ci lint sdk-ts-lint ## Run all checks contributors should run before opening a PR

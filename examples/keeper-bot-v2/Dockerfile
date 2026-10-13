@@ -4,84 +4,64 @@
 # All sensitive configuration (KEEPER_SECRET_KEY, database credentials, RPC URLs)
 # must be supplied at runtime via environment variables or mounted secrets.
 #
-# BUILD USAGE:
-#   docker build -t keeper-bot-v2:latest .
+# BUILD USAGE (from the repository root, because the bot depends on the local
+# TypeScript SDK in packages/sdk-ts):
+#   docker build -f examples/keeper-bot-v2/Dockerfile -t keeper-bot-v2:latest .
 #
 # RUNTIME USAGE:
-#   # With environment variables from a file:
-#   docker run --env-file .env.example keeper-bot-v2:latest
+#   docker run --env-file examples/keeper-bot-v2/.env keeper-bot-v2:latest
 #
-#   # With explicit environment variables:
-#   docker run \
-#     -e KEEPER_SECRET_KEY='SBXXXX...' \
-#     -e REGISTRY_CONTRACT_ID='CXXXX...' \
-#     -e NETWORK='testnet' \
-#     -e DATABASE_URL='postgresql://user:pass@db:5432/keeper' \
-#     keeper-bot-v2:latest
-#
-# DATABASE: Requires PostgreSQL (via environment variable DATABASE_URL).
-# On first run, pending migrations are applied automatically. The database
-# connection string must be provided at runtime; it is not baked into the image.
+# DATABASE: Optional PostgreSQL via DATABASE_URL. The schema is applied on
+# startup. The connection string is supplied at runtime, never baked in.
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Stage 1: Builder
 # ═══════════════════════════════════════════════════════════════════════════
 FROM node:20-alpine AS builder
 
-# Set working directory in builder
-WORKDIR /build
-
-# Copy package metadata only (for dependency caching)
-COPY package.json package-lock.json ./
-
-# Install dependencies with npm ci (strict lock file adherence, no silent rewrites)
-# --omit=dev removes devDependencies in the final layer
+# Build the local SDK first: the bot's package.json references it as
+# file:../../packages/sdk-ts, so it must exist at that relative path.
+WORKDIR /repo/packages/sdk-ts
+COPY packages/sdk-ts/package.json packages/sdk-ts/package-lock.json ./
 RUN npm ci --no-audit --no-fund
+COPY packages/sdk-ts ./
+RUN npm run build
 
-# Copy source code
-COPY src ./src
-COPY index.js ./
-
-# Run build step if one exists (transpile, bundle, etc.)
-# If there is no build script, this is a no-op and the source is ready as-is.
-RUN npm run build 2>/dev/null || true
+WORKDIR /repo/examples/keeper-bot-v2
+COPY examples/keeper-bot-v2/package.json examples/keeper-bot-v2/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY examples/keeper-bot-v2/tsconfig.json ./
+COPY examples/keeper-bot-v2/src ./src
+RUN npm run build && npm prune --omit=dev
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Stage 2: Runtime
 # ═══════════════════════════════════════════════════════════════════════════
 FROM node:20-alpine
 
-# Metadata labels for container registries and tools
 LABEL org.opencontainers.image.title="Soroban Keeper Network Bot v2"
 LABEL org.opencontainers.image.description="Production-ready off-chain keeper bot for automated Soroban task execution"
 LABEL org.opencontainers.image.vendor="Soroban Keeper Network Contributors"
-LABEL org.opencontainers.image.version="0.1.0"
+LABEL org.opencontainers.image.version="0.2.0"
 
-# Install curl for health checks (minimal footprint: 5.5 MiB total for runtime image)
-RUN apk add --no-cache curl
-
-# Create non-root user for security (optional but recommended)
+# Non-root user
 RUN addgroup -g 1000 keeper && adduser -D -u 1000 -G keeper keeper
 
-# Set working directory
-WORKDIR /app
+# Keep the repository layout so the SDK symlink in node_modules resolves.
+WORKDIR /repo/examples/keeper-bot-v2
+COPY --from=builder --chown=keeper:keeper /repo/packages/sdk-ts/package.json /repo/packages/sdk-ts/package.json
+COPY --from=builder --chown=keeper:keeper /repo/packages/sdk-ts/dist /repo/packages/sdk-ts/dist
+COPY --from=builder --chown=keeper:keeper /repo/examples/keeper-bot-v2/package.json ./package.json
+COPY --from=builder --chown=keeper:keeper /repo/examples/keeper-bot-v2/node_modules ./node_modules
+COPY --from=builder --chown=keeper:keeper /repo/examples/keeper-bot-v2/dist ./dist
 
-# Copy built artifacts and dependencies from builder stage
-COPY --from=builder --chown=keeper:keeper /build/dist ./dist
-COPY --from=builder --chown=keeper:keeper /build/node_modules ./node_modules
-COPY --from=builder --chown=keeper:keeper /build/index.js ./index.js
-COPY --from=builder --chown=keeper:keeper /build/package.json ./package.json
-
-# Switch to non-root user
 USER keeper
 
-# Expose no ports (keeper-bot-v2 is outbound-only; does not expose HTTP endpoints)
-# Health checks should be performed via exit codes or external monitoring.
+# The metrics endpoint listens on METRICS_PORT (default 9090) when enabled.
+EXPOSE 9090
 
-# Default command: run the bot in daemon mode (continuous polling).
-# Override with `--once` argument or `RUN_ONCE=true` environment variable for
-# one-shot execution (suitable for cron/serverless deployments).
-CMD ["node", "index.js"]
+# Daemon mode by default. Pass `--once` or set RUN_ONCE=true for one-shot runs.
+CMD ["node", "dist/index.js"]
 
 # ═══════════════════════════════════════════════════════════════════════════
 # RUNTIME CONFIGURATION

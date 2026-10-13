@@ -113,7 +113,7 @@ export class AlertManager {
         // Ongoing incident — do nothing (deduplication)
       } else {
         // Incident cleared — remove from active so it can re-trigger
-        this.activeIncidents.delete(rule.id);
+        this.clearIncident(rule.id);
       }
     }
   }
@@ -123,8 +123,16 @@ export class AlertManager {
     return new Set(this.activeIncidents);
   }
 
+  /**
+   * Clears an incident by its exact ID, or every incident a rule raised when
+   * given the rule's ID (rules may key incidents as `<ruleId>:<detail>`).
+   */
   clearIncident(incidentId: string): void {
-    this.activeIncidents.delete(incidentId);
+    for (const active of this.activeIncidents) {
+      if (active === incidentId || active.startsWith(`${incidentId}:`)) {
+        this.activeIncidents.delete(active);
+      }
+    }
   }
 }
 

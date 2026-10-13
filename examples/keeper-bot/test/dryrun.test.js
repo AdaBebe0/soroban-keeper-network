@@ -13,7 +13,7 @@
 
 "use strict";
 
-const { describe, it, beforeEach } = require("node:test");
+const { describe, it } = require("node:test");
 const assert = require("node:assert");
 const {
   createSkipDecision,
@@ -212,7 +212,7 @@ describe("Decision Output Format", () => {
       assert.strictEqual(logs.length, 3);
 
       // Each line should be independently parseable
-      logs.forEach((line, idx) => {
+      logs.forEach((line) => {
         const parsed = JSON.parse(line);
         assert.ok(parsed.taskId);
         assert.ok(parsed.decision);

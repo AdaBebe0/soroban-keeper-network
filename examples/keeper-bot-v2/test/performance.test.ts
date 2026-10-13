@@ -293,15 +293,9 @@ describe("performance", () => {
         roundTimings.push(duration);
       }
 
-      // All rounds should be similar speed (no degradation)
-      const avgTime = roundTimings.reduce((a, b) => a + b, 0) / roundTimings.length;
-      const maxTime = Math.max(...roundTimings);
-      const minTime = Math.min(...roundTimings);
-
-      // Max should not be more than 3x the average
-      expect(maxTime).toBeLessThan(avgTime * 3);
-
-      // Should all complete quickly
+      // Every round should complete quickly. A relative check (max vs. average)
+      // is not used: rounds take well under a millisecond, so JIT warm-up in
+      // the first round dominates the ratio and makes it flaky.
       for (const time of roundTimings) {
         expect(time).toBeLessThan(50);
       }

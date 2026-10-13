@@ -284,8 +284,7 @@ describe("AccountPool.acquire() with least-loaded strategy", () => {
 
     const pool = new AccountPool(config);
 
-    // Manually load up account-0 and account-1
-    const acct0 = pool.acquire();
+    // Load up account-0 and account-1 with one pending transaction each
     pool.acquire();
     pool.acquire();
 
@@ -311,7 +310,7 @@ describe("AccountPool.acquire() with least-loaded strategy", () => {
     expect(first.label).toBe("account-0"); // first in pool, first when tied
   });
 
-  it("tracks pending counts correctly across multiple acquires", () => {
+  it("tracks pending counts correctly across acquires and releases", () => {
     const config: AccountPoolConfig = {
       accounts: [
         { secretKey: createTestSecretKey(1), label: "account-0" },
@@ -322,17 +321,19 @@ describe("AccountPool.acquire() with least-loaded strategy", () => {
 
     const pool = new AccountPool(config);
 
-    const acct0 = pool.acquire();
-    const acct0_2 = pool.acquire();
-    expect(acct0.label).toBe("account-0");
-    expect(acct0_2.label).toBe("account-0"); // both are least-loaded initially
+    const first = pool.acquire();
+    expect(first.label).toBe("account-0"); // tied at 0, first in pool wins
 
-    const acct1 = pool.acquire(); // now picks account-1
-    expect(acct1.label).toBe("account-1");
+    const second = pool.acquire();
+    expect(second.label).toBe("account-1"); // account-0 now has 1 pending
 
-    // account-1 should now be least-loaded (only 1 vs 2)
-    const acct1_2 = pool.acquire();
-    expect(acct1_2.label).toBe("account-1");
+    const third = pool.acquire();
+    expect(third.label).toBe("account-0"); // tied at 1 again
+
+    // Releasing account-1 makes it strictly least-loaded (0 vs 2)
+    pool.release(second.publicKey, true);
+    const fourth = pool.acquire();
+    expect(fourth.label).toBe("account-1");
   });
 });
 

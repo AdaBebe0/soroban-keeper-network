@@ -183,12 +183,6 @@ test("profitability-matrix: 2D matrix reward x claim fee", () => {
   const rewards = [50_000n, 100_000n, 200_000n];
   const claimFees = [5_000n, 10_000n, 20_000n];
 
-  const evaluator = new ProfitabilityEvaluator({
-    executeFee: 50_000n,
-    withdrawalFee: 1_000n,
-    minProfitMargin: 0n,
-  });
-
   const results = [];
 
   rewards.forEach((reward) => {

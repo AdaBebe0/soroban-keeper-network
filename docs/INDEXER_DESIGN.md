@@ -251,7 +251,7 @@ places it diverged are recorded in the
 [E14 retrospective](#e14-retrospective-and-consumer-handoff) below. Where
 the proposal and retrospective disagree, the retrospective describes the
 code that exists.
-# Indexer Design
+## Indexer Design
 
 This is the design record for the event indexer (epic E14). It exists so
 later issues — and operators — have a written answer rather than an
@@ -278,7 +278,7 @@ restate that guide.
 
 ---
 
-## 1. One instance per registry deployment
+### 1. One instance per registry deployment
 
 **Decision:** one indexer process tracks exactly one registry contract id,
 on one network. Operators who need testnet, futurenet, and mainnet — or
@@ -287,7 +287,7 @@ a second mainnet deployment after a migration — run one instance per
 
 **Not chosen:** one process tracking several contract ids at once.
 
-### Rationale
+#### Rationale
 
 The original design (issue #218) was scoped to one contract id. That was
 not an oversight that this issue is reversing; it is the model the
@@ -328,14 +328,14 @@ new id, and keep the old instance if the old history still needs to be
 served. That is the operational model this decision is choosing, not a
 workaround.
 
-### What this means for operators
+#### What this means for operators
 
 `INDEXER_CONTRACT_ID` (the contract id the process filters `getEvents`
 on) is a single `C...` value, not a list. One process, one database, one
 contract. The topology, including "do not share a database across
 instances," is in [`INDEXER_DEPLOYMENT.md`](INDEXER_DEPLOYMENT.md).
 
-### What this does not do
+#### What this does not do
 
 No `contract_id` column is added to the tables from issues #220–#222. If
 multi-contract support is ever revisited, that schema change is a new
@@ -343,7 +343,7 @@ issue — it is not a silent expansion of this one.
 
 ---
 
-## 2. Event shape changes across contract `VERSION`
+### 2. Event shape changes across contract `VERSION`
 
 **Decision:** coordinated indexer release. The indexer does not read the
 contract's `VERSION` at ingest time and dispatch to a version-specific
@@ -363,7 +363,7 @@ VERSION for the entire history walk, including events emitted under the
 old WASM. Dispatching on live `VERSION` would misparse everything from
 before the upgrade the moment the contract is upgraded.
 
-### How events are parsed today
+#### How events are parsed today
 
 `ingest::parse::parse_event` is the single decoder for both backfill and
 steady-state ingestion. It already distinguishes two failure modes, and
@@ -381,7 +381,7 @@ this policy keeps both:
   with the contract. Loud failure is the signal to ship the coordinated
   indexer release, not a bug.
 
-### Parsing events from before a version change
+#### Parsing events from before a version change
 
 Already-ingested rows are never re-parsed, migrated, or deleted when
 `VERSION` changes. History is append-only: the row stored from a
@@ -398,7 +398,7 @@ instance has ever stored — which, under this policy, means a payload
 change is additive (see below) or the operator starts a new instance
 instead of replaying.
 
-### Parsing events from after a version change
+#### Parsing events from after a version change
 
 Three kinds of `VERSION` bump, three indexer responses:
 
@@ -412,7 +412,7 @@ Three kinds of `VERSION` bump, three indexer responses:
 already running, and it parses the new shape. An old indexer that meets
 a changed known payload is not asked to guess; it fails loudly.
 
-### Already-ingested data
+#### Already-ingested data
 
 The rows already in the database are the history from before the
 version change. They are not rewritten to look like the new shape.
@@ -430,7 +430,7 @@ version change. They are not rewritten to look like the new shape.
   the two streams in one database is how derived balances would silently
   disagree with the contract.
 
-### Why not `VERSION`-dispatch
+#### Why not `VERSION`-dispatch
 
 A version-specific parser *keyed on the event's emission-time VERSION*
 is a reasonable design for a project that must ingest mixed history
@@ -458,7 +458,7 @@ silent expansion of this one. Today's `parse_event` is the VERSION-3
 decoder; a later VERSION-4 decoder would sit beside it rather than
 replace it.
 
-### What a coordinated release looks like
+#### What a coordinated release looks like
 
 When a contract change will alter a known event's payload:
 
@@ -477,7 +477,7 @@ release.
 
 ---
 
-## 3. Data retention and archival
+### 3. Data retention and archival
 
 **Decision:** keep every successfully ingested raw event in the primary
 database for the full lifetime of an indexer instance. There is no
@@ -488,7 +488,7 @@ This is a deliberate full-retention policy, not the absence of a policy.
 The database grows monotonically, and the operator accepts that storage
 cost in exchange for a complete audit trail.
 
-### Why full retention wins
+#### Why full retention wins
 
 The raw event log is the indexer's evidence. It records which on-chain
 events produced every answer exposed by the API and makes an independent
@@ -512,7 +512,7 @@ queries depend on a second storage system and a restore path. For one
 registry deployment's compact event stream, that complexity is not
 justified by measured storage pressure.
 
-### Cost and operating rules
+#### Cost and operating rules
 
 Full retention means disk use is unbounded over an unbounded service
 lifetime. Operators must therefore treat database capacity as a normal
@@ -535,7 +535,7 @@ recovery operation, but it is not a retention mechanism. Manual deletion
 of old rows produces an unsupported, incomplete index and must not be
 presented as a healthy full-history instance.
 
-### Revisit trigger
+#### Revisit trigger
 
 There is intentionally no time or size threshold that starts deletion.
 If measured growth makes full primary retention operationally
@@ -548,7 +548,7 @@ forever.
 
 ---
 
-## E14 retrospective and consumer handoff
+### E14 retrospective and consumer handoff
 
 E14 produced a typed fifteen-event model, idempotent ingestion, a
 cursor-paged SQLite event store, state folds, backfill/checkpoint logic,
@@ -565,7 +565,7 @@ the duplicate storage paths are tracked in
 This document does not describe the service as deployed until that issue
 is resolved.
 
-### What changed from the original design
+#### What changed from the original design
 
 | Area | Original decision | What was built and why |
 | --- | --- | --- |
@@ -583,7 +583,7 @@ alongside the SQLite path. They are not the v1 API's storage contract and
 must not be combined with the SQLite migrations. Removing or consolidating
 that second path is part of #582.
 
-### Stable v1 consumer surface
+#### Stable v1 consumer surface
 
 Every HTTP path is rooted at `/v1`. The committed
 `indexer/openapi.yaml`, generated from the Rust handlers and response
@@ -615,7 +615,7 @@ preserve resumability and use additive response fields where possible.
 Authentication and higher-limit API-key behavior are also provisional
 until #579. Anonymous public reads remain the baseline contract.
 
-### Handoff by consumer
+#### Handoff by consumer
 
 **E15 keeper bot v2.** Use `/v1/stream?event_type=task_registered` for
 candidate discovery and persist the last processed cursor. On reconnect,
@@ -636,7 +636,7 @@ updates. Display indexed freshness from `/health`. Treat aggregate data as
 eventually consistent within ingestion lag plus the configured cache TTL;
 do not present it as an authoritative on-chain precondition for a write.
 
-### Resolved and deferred questions
+#### Resolved and deferred questions
 
 - **Retention is resolved, not deferred:** issue #375 records deliberate
   full raw-event retention for the lifetime of each instance. There is no

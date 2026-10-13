@@ -126,9 +126,9 @@ to the keeper's current stake. A caller (the admin) that asks to slash more than
 staked is very likely working from stale information (the keeper already partially unbonded, or a
 concurrent slash already reduced the stake) — surfacing that loudly is safer than silently slashing
 a smaller amount than intended and reporting success. See invariant impact in §8.
-# Staking & Slashing Design (Epic E06)
+## Staking & Slashing Design (Epic E06)
 
-## Context
+### Context
 
 The registry currently has no concept of keeper reputation or accountability
 beyond the lock-window mechanic that prevents a squatting keeper from holding
@@ -140,7 +140,7 @@ decision and rationale, and the exact storage keys and entry point signatures
 are pinned here so issues 0289 onward implement against a fixed design rather
 than each guessing independently.
 
-## 1. Dependency on the verifier epic (E04)
+### 1. Dependency on the verifier epic (E04)
 
 **Decision: staking does *not* depend on E04's verifier work landing.**
 
@@ -158,7 +158,7 @@ derives on its own from a failed verification. If and when E04's verifier
 work lands, a future issue can wire an on-chain verification failure into an
 automatic slash trigger — that is out of scope here and not assumed.
 
-## 2. Where stake lives
+### 2. Where stake lives
 
 **Decision: a separate stake escrow in this same contract, tracked under its
 own storage key, not a dedicated staking contract.**
@@ -180,7 +180,7 @@ cross-contract call tax on every stake check. If a future security review
 finds this insufficient, splitting stake into its own contract remains
 possible later; nothing in this design forecloses it.
 
-## 3. Unbonding
+### 3. Unbonding
 
 **Decision: withdrawal is delayed, not immediate.**
 
@@ -203,7 +203,7 @@ instance's own storage TTL. Keeping the delay strictly below the renewal
 window makes that scenario impossible regardless of how much (or little)
 other activity the registry sees while a request is pending.
 
-## 4. Dispute windows
+### 4. Dispute windows
 
 There are two distinct dispute windows in this design, covering two
 different things, and they are deliberately not unified into one
@@ -217,7 +217,7 @@ routes an upheld execution dispute into the same `slash` entry point
 the other, and conflating them into one "dispute" concept would blur what
 each is actually protecting.
 
-### 4.1 The post-slash appeal window
+#### 4.1 The post-slash appeal window
 
 **Decision: a fixed post-slash appeal window, not a pre-slash hold.**
 
@@ -246,7 +246,7 @@ without a stated reason to treat slashing differently.
 
 `DISPUTE_WINDOW_LEDGERS = 51_840` (~3 days at 5s/ledger).
 
-#### 4.1.1 Who can raise a dispute, and what happens to the stake meanwhile
+##### 4.1.1 Who can raise a dispute, and what happens to the stake meanwhile
 
 The slashed keeper itself is the only party who can raise an appeal against
 its own slash (`raise_slash_appeal(keeper, slash_id)`, `keeper.require_auth()`
@@ -271,7 +271,7 @@ the keeper — the admin is expected to have moved the funds back from
 is the admin's own choice and this contract has no visibility into what
 happens to swept funds afterward.
 
-### 4.2 The execution dispute window (issue 0293 / #421)
+#### 4.2 The execution dispute window (issue 0293 / #421)
 
 **Decision: a global, admin-configurable hold on freshly-credited rewards,
 disabled by default, rather than a change to `register_task`'s signature.**
@@ -310,7 +310,7 @@ Two shapes were considered for *where* this window is configured:
   window (§3): a hold longer than that window could let a pending credit
   outlive its own storage TTL before it is ever finalized.
 
-### What actually changes in `execute_task` / `withdraw_rewards`
+#### What actually changes in `execute_task` / `withdraw_rewards`
 
 `execute_task`'s existing effect — `credit_keeper` writing directly into
 `DataKey::KeeperReward` — is preserved exactly when the window is `0`. When
@@ -332,7 +332,7 @@ was never counted as "credited" for I-6's purposes in the first place, the
 same way an open task's escrow (not yet a keeper balance at all) has never
 been covered by I-6 either.
 
-### Disputing an execution
+#### Disputing an execution
 
 `dispute_execution(owner, task_id)` — the **task's owner**, not any third
 party, has standing (they are the one who paid for the task and is best
@@ -357,7 +357,7 @@ trustworthy than there was for E04's unimplemented verifier). `uphold_dispute
 = false` clears the `disputed` flag, returning the credit to the normal
 finalization path once its `unlock_ledger` passes.
 
-## 5. The slash mechanism
+### 5. The slash mechanism
 
 **Decision: `slash(admin, keeper, amount, reason)`, admin-authorized, funds
 move to a treasury address matching `sweep_fees`'s existing pattern.**
@@ -393,7 +393,7 @@ pub fn slash(
   applied twice for the same underlying incident" a concrete handle: each
   `slash_id` is independent, one-shot, and appealable exactly once.
 
-## 6. Interaction with existing mechanics
+### 6. Interaction with existing mechanics
 
 **Decision: a staked keeper gets no different treatment in `claim_task` or
 `execute_task` in this first version — except the minimum-stake requirement,
@@ -407,7 +407,7 @@ and that gate defaults to `0` (no requirement) until an admin explicitly
 configures otherwise — the same "off by default, opt-in via admin config"
 posture `min_reward`/`MinReward` already established for the task side.
 
-## Storage keys (pinned)
+### Storage keys (pinned)
 
 | Key | Type | Storage | Meaning |
 |-----|------|---------|---------|
@@ -419,7 +419,7 @@ posture `min_reward`/`MinReward` already established for the task side.
 | `DisputeWindowLedgers` | `u32` | Instance | Configurable execution-dispute hold `execute_task` credits go through. Default `0` (disabled — a credit is withdrawable immediately, the unmodified wave-1 MVP path). See §4.2. |
 | `PendingReward(Address)` | `Vec<PendingCredit>` (`{ task_id: u64, net_reward: i128, unlock_ledger: u32, disputed: bool }`) | Persistent | A keeper's not-yet-finalized `execute_task` credits. Only populated when `DisputeWindowLedgers > 0`. |
 
-## Entry point signatures (pinned)
+### Entry point signatures (pinned)
 
 ```rust
 pub fn stake_deposit(e: Env, keeper: Address, amount: i128) -> Result<(), KeeperError>;
@@ -446,7 +446,7 @@ uses — e.g. event topics), not an arbitrary string, since Soroban events and s
 types. A future issue could extend this to a longer `Bytes` payload if a 9-character reason code
 proves too restrictive in practice; not needed for this epic's scope.
 
-## Invariant impact
+### Invariant impact
 
 `invariants::assert_solvent` (I-1) must be extended: `token_balance == open_escrow +
 keeper_balances + fees_accrued + stake_total`. This implementation updates the function's
@@ -456,7 +456,7 @@ design, so an isolation invariant that included stake would be actively wrong he
 recorded explicitly rather than left as a silent gap between the invariant's doc comment and its
 actual (correct) scope.
 
-## Scope of this implementation
+### Scope of this implementation
 
 This document, together with the code in this PR, covers backlog issues **0289** (stake storage +
 `stake_deposit`), **0290** (unbonding: `initiate_unbond` + `withdraw_stake`), and **0291**

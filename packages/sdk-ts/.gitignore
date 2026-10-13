@@ -10,4 +10,3 @@ dist/
 # source. `npm run docs:check` (wired into CI) validates it can be
 # regenerated without warnings; it is not published to this repo.
 docs/reference/
-dist-test/

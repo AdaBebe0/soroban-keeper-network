@@ -12,7 +12,7 @@
 
 "use strict";
 
-const { describe, it, beforeEach } = require("node:test");
+const { describe, it } = require("node:test");
 const assert = require("node:assert");
 const {
   checkVerifierSupport,
@@ -20,61 +20,7 @@ const {
   executeTaskOffChain,
   EXECUTORS,
   VERIFIER_STRATEGIES,
-  ESTIMATED_CLAIM_FEE_STROOPS,
-  ESTIMATED_EXECUTE_BASE_FEE_STROOPS,
 } = require("../index.js");
-
-/**
- * Fixture: A batch of tasks representing a single keeper round.
- * Tests process these identically in both dry-run and live code paths.
- */
-const FIXTURE_MIXED_ROUND = [
-  {
-    taskId: 1001,
-    taskType: 4,
-    taskTypeName: "TtlExtension",
-    reward: 1000000n,
-    deadline: Math.floor(Date.now() / 1000) + 10000,
-    verifier: null,
-    description: "TtlExtension, profitable, supported executor",
-  },
-  {
-    taskId: 1002,
-    taskType: 0,
-    taskTypeName: "Liquidation",
-    reward: 500000n,
-    deadline: Math.floor(Date.now() / 1000) + 10000,
-    verifier: null,
-    description: "Liquidation, unprofitable (no executor)",
-  },
-  {
-    taskId: 1003,
-    taskType: 4,
-    taskTypeName: "TtlExtension",
-    reward: 50000n,
-    deadline: Math.floor(Date.now() / 1000) + 10000,
-    verifier: null,
-    description: "TtlExtension, unprofitable (reward too low)",
-  },
-  {
-    taskId: 1004,
-    taskType: 4,
-    taskTypeName: "TtlExtension",
-    reward: 1000000n,
-    deadline: Math.floor(Date.now() / 1000) - 1000,
-    verifier: null,
-    description: "TtlExtension, past deadline",
-  },
-  {
-    taskId: 1005,
-    taskType: 5,
-    taskTypeName: "Custom",
-    reward: 2000000n,
-    deadline: Math.floor(Date.now() / 1000) + 10000,
-    verifier: "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
-    description: "Custom with unrecognized verifier",
-  },
-];
 
 function makeCtx() {
   const logs = [];

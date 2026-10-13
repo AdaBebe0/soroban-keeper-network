@@ -2,8 +2,8 @@
 
 const { describe, it } = require("node:test");
 const assert = require("node:assert");
-const { runKeeperRound, isLostClaimRaceError } = require("../src/loop.js");
-const { MetricsCollector } = require("../src/metrics.js");
+const { runKeeperRound, isLostClaimRaceError } = require("../bot/loop.js");
+const { MetricsCollector } = require("../bot/metrics.js");
 
 describe("Simulated multi-keeper competition test harness (Issue #404)", () => {
   it("correctly identifies lost claim race errors", () => {

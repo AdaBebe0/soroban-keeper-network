@@ -138,7 +138,7 @@ async fn read_and_write_round_trip_against_the_real_contract() {
     assert_eq!(c.get_fee_bps().await.unwrap(), 300);
     c.set_fee_bps(450).await.unwrap();
     assert_eq!(c.get_fee_bps().await.unwrap(), 450);
-    assert_eq!(c.is_paused().await.unwrap(), false);
+    assert!(!c.is_paused().await.unwrap());
 }
 
 #[tokio::test]

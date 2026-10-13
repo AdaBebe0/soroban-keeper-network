@@ -29,11 +29,11 @@ This document details how configuration flows from the container runtime through
 │  ... (all optional vars)                                    │
 └───────────────────┬─────────────────────────────────────────┘
                     │
-    docker run → CMD ["node", "index.js"]
+    docker run → CMD ["node", "dist/index.js"]
                     │
                     ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ Node.js Process Startup (index.js)                          │
+│ Node.js Process Startup (dist/index.js)                     │
 │                                                              │
 │  1. require("dotenv").config()                              │
 │     Loads .env file if present (used for local dev)         │
@@ -230,9 +230,9 @@ $ docker-compose up -d
 #      -e POLL_INTERVAL_MS='10000' \
 #      keeper-bot-v2:latest
 #
-# 4. Node.js process starts (CMD ["node", "index.js"])
+# 4. Node.js process starts (CMD ["node", "dist/index.js"])
 #    - process.env contains all the above variables
-#    - index.js calls validateAndLoadConfig()
+#    - dist/index.js calls validateConfig()
 #    - Configuration is validated and stored in CONFIG object
 ```
 
@@ -266,7 +266,7 @@ docker-compose down -v   # Stop containers, delete data
 
 **Build:**
 ```bash
-docker build -t keeper-bot-v2:latest .
+docker build -f examples/keeper-bot-v2/Dockerfile -t keeper-bot-v2:latest ../..
 ```
 
 **Run against existing PostgreSQL:**
@@ -296,7 +296,7 @@ docker run \
 
 **Build and push:**
 ```bash
-docker build -t your-registry/keeper-bot-v2:latest .
+docker build -f examples/keeper-bot-v2/Dockerfile -t your-registry/keeper-bot-v2:latest ../..
 docker push your-registry/keeper-bot-v2:latest
 ```
 
@@ -397,7 +397,7 @@ aws ecs create-service \
 
 **Safe (no secrets):**
 - Node.js runtime (20 Alpine)
-- Application source code (index.js, src/)
+- Compiled application (dist/) built from src/
 - npm dependencies (@stellar/stellar-sdk, dotenv, etc.)
 - .env.example (placeholder values only)
 - docker-compose.yml (example topology)
@@ -481,7 +481,7 @@ livenessProbe:
     command:
     - sh
     - -c
-    - ps aux | grep -q '[n]ode index.js'
+    - ps aux | grep -q '[n]ode dist/index.js'
   initialDelaySeconds: 10
   periodSeconds: 30
 ```
