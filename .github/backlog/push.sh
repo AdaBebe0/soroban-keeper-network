@@ -10,11 +10,16 @@
 # pushed but still open, is held back rather than created — re-run the
 # script after the dependency closes to pick it up.
 #
+# --no-hold publishes dependents anyway, for releasing a whole wave at
+# once. Each dependent's body then gets a "Depends on" section listing its
+# dependencies by title, so the ordering is still visible on GitHub.
+#
 # --dry-run does not query GitHub, so it cannot tell what's actually
 # closed — every depends_on will show as held back in dry-run output.
 #
 #   ./.github/backlog/push.sh --from 1 --to 50 --dry-run
 #   ./.github/backlog/push.sh --from 1 --to 50
+#   ./.github/backlog/push.sh --from 405 --to 604 --no-hold
 #
 # Requires: gh (authenticated), awk, sed.
 
@@ -23,10 +28,11 @@ set -euo pipefail
 FROM=1
 TO=600
 DRY_RUN=0
+NO_HOLD=0
 REPO="${BACKLOG_REPO:-soroban-tooling/soroban-keeper-network}"
 
 usage() {
-  sed -n '3,16p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '3,22p' "$0" | sed 's/^# \{0,1\}//'
   exit "${1:-0}"
 }
 
@@ -36,6 +42,7 @@ while [ $# -gt 0 ]; do
     --to)      TO="$2";   shift 2 ;;
     --repo)    REPO="$2"; shift 2 ;;
     --dry-run) DRY_RUN=1; shift ;;
+    --no-hold) NO_HOLD=1; shift ;;
     -h|--help) usage 0 ;;
     *) echo "Unknown argument: $1" >&2; usage 1 ;;
   esac
@@ -140,12 +147,14 @@ for file in "$ISSUE_DIR"/*.md; do
   # parallel: the dependent issue simply doesn't exist on GitHub yet for
   # anyone to claim.
   unmet=""
+  dep_titles=()
   if [ -n "$depends_on" ]; then
     IFS=',' read -ra dep_nums <<< "$depends_on"
     for dep_num in "${dep_nums[@]}"; do
       dep_num="$(echo "$dep_num" | sed 's/^[ \t"]*//; s/[ \t"]*$//')"
       [ -z "$dep_num" ] && continue
       dep_title="$(title_for_issue_number "$dep_num")"
+      [ -n "$dep_title" ] && dep_titles+=("$dep_title")
       if [ -z "$dep_title" ]; then
         unmet="$unmet $dep_num(no-file)"
       elif ! grep -Fxq "$dep_title" "$EXISTING" 2>/dev/null; then
@@ -155,7 +164,7 @@ for file in "$ISSUE_DIR"/*.md; do
       fi
     done
   fi
-  if [ -n "$unmet" ]; then
+  if [ -n "$unmet" ] && [ "$NO_HOLD" -eq 0 ]; then
     echo "  ~  $base — held back, depends_on not closed:$unmet"
     held=$((held + 1))
     continue
@@ -171,6 +180,12 @@ for file in "$ISSUE_DIR"/*.md; do
 
   body_file="$(mktemp)"
   issue_body "$file" > "$body_file"
+  if [ "$NO_HOLD" -eq 1 ] && [ "${#dep_titles[@]}" -gt 0 ]; then
+    {
+      printf '\n## Depends on\n\nStart after these are closed:\n\n'
+      for t in "${dep_titles[@]}"; do printf -- '- %s\n' "$t"; done
+    } >> "$body_file"
+  fi
 
   # Build the --label arguments. Labels are comma-separated in front matter.
   label_args=()

@@ -11,7 +11,7 @@ diffable, and reviewable — the same standard we hold code to.
 
 ## How this is organised
 
-Issues are numbered `0001`–`0600` in **delivery order**, not by topic. A lower
+Issues are numbered `0001`–`0604` in **delivery order**, not by topic. A lower
 number means the work is ready to start now; a higher number means it depends on
 something earlier. Each issue file declares which epic it belongs to, so you can
 still read the backlog thematically using the [epic index](#epic-index) below.
@@ -53,14 +53,23 @@ earlier work actually produced.
 |------|--------|-------|--------|
 | 1 | 0001–0050 | Correctness, spec alignment, and test gaps in the shipped MVP; keeper-bot fixes; contributor tooling | **Published** |
 | 2 | 0051–0150 | Execution verifier, batch operations, gas work, fuzzing and invariant testing | **Published** |
-| 3 | 0151–0300 | TypeScript SDK, Rust SDK, event indexer, keeper bot v2 | Partially published (0151–0200) |
-| 4 | 0301–0450 | Staking, slashing, reputation, treasury, governance | Planned |
-| 5 | 0451–0600 | Dashboard, CLI, observability, audit readiness, docs and ecosystem examples | Planned |
+| 3 | 0151–0300, 0405–0408 | TypeScript SDK, Rust SDK, event indexer, keeper bot v2 | **Published** |
+| 4 | 0301–0404, 0409–0430 | Staking, slashing, reputation, treasury, governance, task conditions, oracle integration | **Published** |
+| 5 | 0431–0604 | CI/CD, CLI, observability, security and audit readiness, dashboard, examples, documentation | **Published** |
 
 "Planned" means the epic scope and issue count are fixed but the issue files
 are not written yet. Waves are written one at a time, deliberately: later
 issues depend on decisions earlier work settles, and writing them too early
 risks specifying against the wrong assumptions.
+
+**Wave 5 and the remainder of waves 3–4 (0405–0604)** were written together
+from a survey of what the codebase still lacks: the epics with no issues yet
+(E11 Oracle, E16 CLI, E17 Dashboard, E18 Observability, E22 Examples), the
+unwritten balance of E10, E13, E19, E20 and E21, and nothing else. They are
+numbered after 0404 rather than renumbering earlier files, so a wave's range
+is no longer one contiguous block. They were published with `--no-hold`, so
+a dependent issue is open alongside its dependencies; its "Depends on"
+section says what to finish first.
 
 **Wave 2 summary:** All 100 issues (0051–0150) are now published, covering
 E03 Fuzzing & Invariant Testing, E04 On-chain Execution Verifier, and E05
@@ -176,7 +185,14 @@ already exists on the repository is skipped rather than duplicated.
 
 # Actually publish
 ./.github/backlog/push.sh --from 1 --to 50
+
+# Publish a whole wave, including issues whose dependencies are still open
+./.github/backlog/push.sh --from 405 --to 604 --no-hold
 ```
+
+By default an issue whose `depends_on` is not closed is held back. With
+`--no-hold` it is published anyway, and a "Depends on" section listing its
+dependencies by title is appended to its body.
 
 Issue numbers in this directory are **backlog** numbers. They are deliberately
 never written into the issue title or body, because GitHub assigns its own issue
