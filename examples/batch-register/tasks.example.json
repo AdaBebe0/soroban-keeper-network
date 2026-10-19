@@ -1,0 +1,31 @@
+{
+  "tasks": [
+    {
+      "label": "liquidate-position-1041",
+      "task_type": "Liquidation",
+      "calldata": "6c69717569646174653a706f736974696f6e3a31303431",
+      "reward": "1000000",
+      "deadline": "1790000000",
+      "ttl_ledgers": 17280,
+      "lock_ledgers": 120
+    },
+    {
+      "label": "liquidate-position-1042",
+      "task_type": "Liquidation",
+      "calldata": "6c69717569646174653a706f736974696f6e3a31303432",
+      "reward": "1500000",
+      "deadline": "1790000000",
+      "ttl_ledgers": 17280,
+      "lock_ledgers": 120
+    },
+    {
+      "label": "push-xlm-usd-price",
+      "task_type": "OraclePricePush",
+      "calldata": "707573683a584c4d2f555344",
+      "reward": "2000000",
+      "deadline": "1790000000",
+      "ttl_ledgers": 17280,
+      "lock_ledgers": 240
+    }
+  ]
+}

@@ -8,6 +8,16 @@
 # Compiled contract artifacts
 *.wasm
 
+# cargo-fuzz corpus/artifacts (regenerated locally and by CI; the nightly
+# job persists corpus via actions/cache, not git). Deliberately-committed
+# crash regressions are the one exception — see CONTRIBUTING.md's
+# "Fuzzing & crash-to-regression convention".
+fuzz/corpus/*
+!fuzz/corpus/*/
+fuzz/corpus/*/*
+!fuzz/corpus/*/regressions/
+fuzz/artifacts/
+
 # Environment / secrets — NEVER commit these
 .env
 .env.*
@@ -17,6 +27,11 @@
 node_modules/
 npm-debug.log*
 yarn-error.log*
+
+# TypeScript build output
+# TypeScript package build output (packages/*/dist, examples/*/dist)
+packages/*/dist/
+examples/*/dist/
 
 # Editor / OS
 .DS_Store

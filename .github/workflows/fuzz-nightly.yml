@@ -1,0 +1,73 @@
+name: Fuzz (nightly)
+
+# Long-budget fuzz run with a persistent corpus. Complements the fuzz-pr job
+# in ci.yml, which runs the same targets for a much shorter budget and never
+# persists corpus across runs. See docs/CI.md.
+#
+# ADVISORY — continue-on-error: true on every job, consistent with the rest
+# of this repo's non-blocking checks. A crash still surfaces loudly via a
+# `::error::` annotation and a red step in the job summary; it just doesn't
+# gate anything, since this workflow doesn't run against a PR at all.
+
+on:
+  schedule:
+    # 03:17 UTC daily — an off-peak, non-round time so this doesn't pile up
+    # against every other repo's on-the-hour scheduled jobs.
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  fuzz-nightly:
+    name: Fuzz nightly (advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust (nightly)
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Cache cargo
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            fuzz/target
+          key: ${{ runner.os }}-cargo-fuzz-${{ hashFiles('fuzz/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-fuzz-
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+
+      # Corpus cache key includes the run id so a new entry is always saved;
+      # restore-keys falls back to the most recent prior run's corpus, so
+      # coverage accumulates night over night instead of restarting empty.
+      # GitHub evicts old entries under its per-repo cache size limit, so
+      # this does not grow unbounded.
+      - name: Restore fuzz corpus
+        uses: actions/cache@v6
+        with:
+          path: fuzz/corpus
+          key: fuzz-corpus-${{ github.run_id }}
+          restore-keys: fuzz-corpus-
+
+      - name: Run fuzz targets (15 minutes each)
+        run: ./scripts/run-fuzz-targets.sh 900 "Fuzz run (fuzz-nightly)"
+
+      - name: Upload crash artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: fuzz-nightly-artifacts
+          path: fuzz/artifacts/
+          if-no-files-found: ignore
+          retention-days: 30

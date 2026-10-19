@@ -40,7 +40,7 @@ case "$NETWORK" in
     NETWORK_PASSPHRASE="Public Global Stellar Network ; September 2015"
     ;;
   *)
-    echo "❌  Unknown network: $NETWORK. Use: testnet | futurenet | mainnet"
+    echo "Unknown network: $NETWORK. Use: testnet | futurenet | mainnet"
     exit 1
     ;;
 esac
@@ -48,7 +48,7 @@ esac
 # ── Validate environment ─────────────────────────────────────────────────────
 
 if [[ -z "${DEPLOYER_SECRET_KEY:-}" ]]; then
-  echo "❌  DEPLOYER_SECRET_KEY not set."
+  echo "DEPLOYER_SECRET_KEY not set."
   echo "    Export your Stellar secret key: export DEPLOYER_SECRET_KEY=S..."
   exit 1
 fi
@@ -56,7 +56,7 @@ fi
 # ── Admin + reward token addresses ──────────────────────────────────────────
 ADMIN_ADDRESS="${ADMIN_ADDRESS:-$(stellar keys show --hd-path 0 2>/dev/null || echo '')}"
 if [[ -z "$ADMIN_ADDRESS" ]]; then
-  echo "❌  ADMIN_ADDRESS not set."
+  echo "ADMIN_ADDRESS not set."
   echo "    Export admin address: export ADMIN_ADDRESS=G..."
   exit 1
 fi
@@ -70,9 +70,9 @@ esac
 
 FEE_BPS="${FEE_BPS:-300}"
 
-echo "╔══════════════════════════════════════════════════════════════╗"
-echo "║      Soroban Keeper Network — Deployment Script             ║"
-echo "╚══════════════════════════════════════════════════════════════╝"
+echo ""
+echo "Soroban Keeper Network — Deployment Script             "
+echo ""
 echo "  Network   : $NETWORK"
 echo "  RPC URL   : $RPC_URL"
 echo "  Admin     : $ADMIN_ADDRESS"
@@ -82,27 +82,27 @@ echo ""
 
 # ── Build ────────────────────────────────────────────────────────────────────
 
-echo "🔨  Building WASM (release)..."
+echo "Building WASM (release)..."
 cd "$REPO_ROOT"
 cargo build --release --target wasm32-unknown-unknown --package keeper-registry 2>&1 | tee "$DEPLOY_LOG"
 
 # Optimize if wasm-opt is available
 if command -v wasm-opt &>/dev/null; then
-  echo "⚡  Optimizing WASM with wasm-opt..."
+  echo "Optimizing WASM with wasm-opt..."
   wasm-opt -Oz --strip-debug "$WASM_PATH" -o "$OPTIMIZED_WASM"
   DEPLOY_WASM="$OPTIMIZED_WASM"
   echo "   Optimized: $(du -sh "$OPTIMIZED_WASM" | cut -f1)"
 else
   DEPLOY_WASM="$WASM_PATH"
-  echo "ℹ️   wasm-opt not found; deploying unoptimized WASM (install with: cargo install wasm-opt)"
+  echo "ℹwasm-opt not found; deploying unoptimized WASM (install with: cargo install wasm-opt)"
 fi
 
-echo "✅  WASM ready: $(du -sh "$DEPLOY_WASM" | cut -f1)"
+echo "WASM ready: $(du -sh "$DEPLOY_WASM" | cut -f1)"
 
 # ── Upload WASM ──────────────────────────────────────────────────────────────
 
 echo ""
-echo "📤  Uploading WASM to Stellar network..."
+echo "Uploading WASM to Stellar network..."
 WASM_HASH=$(stellar contract upload \
   --wasm "$DEPLOY_WASM" \
   --source "$DEPLOYER_SECRET_KEY" \
@@ -110,12 +110,12 @@ WASM_HASH=$(stellar contract upload \
   --network-passphrase "$NETWORK_PASSPHRASE" \
   2>&1 | tee -a "$DEPLOY_LOG" | tail -1)
 
-echo "✅  WASM hash: $WASM_HASH"
+echo "WASM hash: $WASM_HASH"
 
 # ── Deploy contract ──────────────────────────────────────────────────────────
 
 echo ""
-echo "🚀  Deploying contract..."
+echo "Deploying contract..."
 CONTRACT_ID=$(stellar contract deploy \
   --wasm-hash "$WASM_HASH" \
   --source "$DEPLOYER_SECRET_KEY" \
@@ -123,12 +123,12 @@ CONTRACT_ID=$(stellar contract deploy \
   --network-passphrase "$NETWORK_PASSPHRASE" \
   2>&1 | tee -a "$DEPLOY_LOG" | tail -1)
 
-echo "✅  Contract ID: $CONTRACT_ID"
+echo "Contract ID: $CONTRACT_ID"
 
 # ── Initialize contract ──────────────────────────────────────────────────────
 
 echo ""
-echo "🔧  Initializing KeeperRegistry..."
+echo "Initializing KeeperRegistry..."
 stellar contract invoke \
   --id "$CONTRACT_ID" \
   --source "$DEPLOYER_SECRET_KEY" \
@@ -141,9 +141,9 @@ stellar contract invoke \
   2>&1 | tee -a "$DEPLOY_LOG"
 
 echo ""
-echo "╔══════════════════════════════════════════════════════════════╗"
-echo "║                   Deployment Complete! 🎉                   ║"
-echo "╚══════════════════════════════════════════════════════════════╝"
+echo ""
+echo "Deployment Complete! "
+echo ""
 echo ""
 echo "  Contract ID : $CONTRACT_ID"
 echo "  WASM Hash   : $WASM_HASH"

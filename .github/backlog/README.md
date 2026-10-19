@@ -1,0 +1,199 @@
+# Contribution Backlog
+
+This directory is the source of truth for the project's issue backlog. Every
+issue is written here first, reviewed as a normal file diff, and then published
+to GitHub Issues with `./push.sh`.
+
+Keeping issues in the repository means the roadmap is version-controlled,
+diffable, and reviewable — the same standard we hold code to.
+
+---
+
+## How this is organised
+
+Issues are numbered `0001`–`0604` in **delivery order**, not by topic. A lower
+number means the work is ready to start now; a higher number means it depends on
+something earlier. Each issue file declares which epic it belongs to, so you can
+still read the backlog thematically using the [epic index](#epic-index) below.
+
+```
+.github/backlog/
+├── README.md            ← you are here
+├── push.sh              ← publishes a range of issues to GitHub
+└── issues/
+    ├── 0001-*.md
+    ├── 0002-*.md
+    └── …
+```
+
+Each issue file has YAML front matter followed by the issue body in Markdown:
+
+```yaml
+---
+title: "fix(registry): short imperative description"
+labels: [contract, bug, intermediate]
+epic: E01
+wave: 1
+depends_on: []
+---
+```
+
+The front matter is metadata for the publishing script. Everything below it is
+what appears on GitHub verbatim.
+
+---
+
+## Waves
+
+The backlog is released to GitHub in waves so contributors are never staring at
+600 open issues at once, and so later issues can be revised in light of what the
+earlier work actually produced.
+
+| Wave | Issues | Theme | Status |
+|------|--------|-------|--------|
+| 1 | 0001–0050 | Correctness, spec alignment, and test gaps in the shipped MVP; keeper-bot fixes; contributor tooling | **Published** |
+| 2 | 0051–0150 | Execution verifier, batch operations, gas work, fuzzing and invariant testing | **Published** |
+| 3 | 0151–0300, 0405–0408 | TypeScript SDK, Rust SDK, event indexer, keeper bot v2 | **Published** |
+| 4 | 0301–0404, 0409–0430 | Staking, slashing, reputation, treasury, governance, task conditions, oracle integration | **Published** |
+| 5 | 0431–0604 | CI/CD, CLI, observability, security and audit readiness, dashboard, examples, documentation | **Published** |
+
+"Planned" means the epic scope and issue count are fixed but the issue files
+are not written yet. Waves are written one at a time, deliberately: later
+issues depend on decisions earlier work settles, and writing them too early
+risks specifying against the wrong assumptions.
+
+**Wave 5 and the remainder of waves 3–4 (0405–0604)** were written together
+from a survey of what the codebase still lacks: the epics with no issues yet
+(E11 Oracle, E16 CLI, E17 Dashboard, E18 Observability, E22 Examples), the
+unwritten balance of E10, E13, E19, E20 and E21, and nothing else. They are
+numbered after 0404 rather than renumbering earlier files, so a wave's range
+is no longer one contiguous block. They were published with `--no-hold`, so
+a dependent issue is open alongside its dependencies; its "Depends on"
+section says what to finish first.
+
+**Wave 2 summary:** All 100 issues (0051–0150) are now published, covering
+E03 Fuzzing & Invariant Testing, E04 On-chain Execution Verifier, and E05
+Batch Operations & Gas. Each epic closes with a detailed retrospective
+documenting what shipped versus what was studied and deferred:
+[E05 retrospective (0118)](#0118),
+[E04 retrospective (0141)](#0141), and
+[E03 retrospective (0142)](#0142). These retrospectives provide the definitive
+record of design decisions made during wave 2, including the trust-model
+choice for verifiers, batch operation feasibility studies, and invariant
+testing coverage achieved. Additional depth issues grounded in wave-1 surface
+that landed after the epics were first drafted include calldata bounding,
+the TTL-vs-deadline fix, `NotInitialized` error handling, instance-TTL
+renewal, and the lock-lapse `cancel_task` extension.
+
+Wave 3 issues 0151–0200 (the first 45 of E12 TypeScript SDK, plus the first 5
+of E13 Rust SDK) are now published. The remaining ~193 issues in wave 3 (the
+rest of E13, all of E14 Event Indexer, and all of E15's wave-3 remainder for
+Keeper Bot v2) are still planned — issue 0195 flags an explicit open question
+for whoever drafts E14: whether the indexer should depend on the TypeScript
+SDK's event decoders directly or fork them.
+
+**Wave 3 prerequisite check (completed at wave 2 closeout):** Epic E12
+(TypeScript SDK) was initially flagged as potentially requiring a finalized
+verifier interface from E04 to design its typed client against a stable ABI.
+Review of E04's retrospective (0141) and the shipped `IKeeperVerifier`
+interface confirms that the core interface is now stable and documented in
+`docs/VERIFIER_DESIGN.md`. The trust-model decision has been settled, and
+while some verifier implementations may continue to evolve, the registry-side
+contract interface that E12's SDK must bind against is frozen. Wave 3 SDK
+development can proceed without blocking on further E04 changes. Any
+remaining verifier-related items flagged as "deferred" in issue 0141 are
+enhancements that do not affect the public interface E12 depends on.
+
+**A caveat carried forward from wave 2.** Several wave-1 PRs were still open
+and unmerged when 0051–0100 were originally written; by the time wave 2 was
+completed (0101–0150) and wave 3 begun, most of that surface had landed
+on `main` (issues 0119–0123, 0130 explicitly reground against it). Wave 3's
+TypeScript SDK issues make a similar bet: several method issues (0154, 0168,
+0169) are written against contract features (the verifier field, batch
+registration) that are themselves still backlog items in this same wave-2
+range, not yet implemented. Those issues say so explicitly and should be
+deferred by whoever picks them up until their contract-side dependency has
+actually shipped — check `main`, not just the issue's `depends_on` field,
+since a dependency can be listed but not yet merged.
+
+---
+
+## Picking something up
+
+1. Find an issue labelled `good-first-issue` if this is your first PR here.
+2. **Comment on the GitHub issue** to claim it before you start, so two people
+   don't do the same work.
+3. Read [CONTRIBUTING.md](../../CONTRIBUTING.md) — branching, commit format, and
+   the PR checklist are all there.
+4. Branch from `develop`, not `main`.
+
+Every issue states its own acceptance criteria. If an acceptance criterion turns
+out to be wrong once you are in the code, say so on the issue — a corrected
+issue is a better contribution than a PR that satisfies a bad spec.
+
+---
+
+## Difficulty labels
+
+| Label | What it means |
+|-------|---------------|
+| `good-first-issue` | Self-contained. One or two files. No design decisions required — the issue tells you what to do. |
+| `intermediate` | Assumes you have read the contract and understand the task lifecycle. May touch several files or require a judgement call. |
+| `advanced` | Design-heavy, security-sensitive, or spans multiple components. Discuss your approach on the issue before writing code. |
+
+---
+
+## Epic index
+
+| Epic | Title | Issues | Scope |
+|------|-------|--------|-------|
+| E01 | Contract Core Hardening | 36 | Correctness, error handling, storage TTL, event completeness in `keeper-registry` |
+| E02 | Contract Test Suite | 42 | Unit, boundary, and conservation tests; coverage tooling |
+| E03 | Fuzzing & Invariant Testing | 20 | `cargo-fuzz`, property tests, stateful model checking |
+| E04 | On-chain Execution Verifier | 26 | The `IKeeperVerifier` interface and registry-side verification callback |
+| E05 | Batch Operations & Gas | 22 | Batch registration, storage layout tuning, WASM size and CPU budget work |
+| E06 | Keeper Staking & Slashing | 30 | Stake escrow, slash conditions, unbonding, dispute windows |
+| E07 | Keeper Reputation | 20 | On-chain scoring, priority queues, decay |
+| E08 | Treasury & Fee Distribution | 22 | Treasury contract, automated fee routing, revenue accounting |
+| E09 | Governance & $KPRS | 30 | Token contract, proposals, voting, timelock, parameter control |
+| E10 | Task Conditions & checkUpkeep | 22 | On-chain predicates evaluated before a claim is allowed |
+| E11 | Oracle Integration | 16 | Reflector/Band-driven task conditions |
+| E12 | TypeScript SDK | 38 | Typed client, transaction builders, React hooks, docs |
+| E13 | Rust SDK | 22 | Typed client crate for contract-to-contract and native integrations |
+| E14 | Event Indexer | 32 | Ingest, schema, API, backfill, reorg handling |
+| E15 | Keeper Bot v2 | 38 | State persistence, profitability, concurrency, pluggable executors |
+| E16 | CLI Tooling | 24 | `skn` CLI for deploying, registering, and inspecting tasks |
+| E17 | Web Dashboard | 32 | Task explorer, keeper leaderboard, protocol stats |
+| E18 | Observability & Ops | 20 | Metrics, tracing, alerting, runbooks |
+| E19 | Security & Audit Readiness | 28 | Threat model, invariants doc, audit prep, disclosure process |
+| E20 | Documentation & DevRel | 34 | Guides, tutorials, API reference, integration walkthroughs |
+| E21 | CI/CD & Developer Experience | 26 | Pipelines, release automation, local tooling, templates |
+| E22 | Examples & Ecosystem Integrations | 20 | Reference dApps that register tasks against the registry |
+| | **Total** | **600** | |
+
+---
+
+## Publishing
+
+`push.sh` reads the issue files, converts the front matter into `gh issue create`
+arguments, and publishes a range. It is idempotent by title: an issue whose title
+already exists on the repository is skipped rather than duplicated.
+
+```bash
+# Dry run — print what would be created, change nothing
+./.github/backlog/push.sh --from 1 --to 50 --dry-run
+
+# Actually publish
+./.github/backlog/push.sh --from 1 --to 50
+
+# Publish a whole wave, including issues whose dependencies are still open
+./.github/backlog/push.sh --from 405 --to 604 --no-hold
+```
+
+By default an issue whose `depends_on` is not closed is held back. With
+`--no-hold` it is published anyway, and a "Depends on" section listing its
+dependencies by title is appended to its body.
+
+Issue numbers in this directory are **backlog** numbers. They are deliberately
+never written into the issue title or body, because GitHub assigns its own issue
+numbers on publish and the two must not be confused.

@@ -1,0 +1,4 @@
+# Last-known-good optimized `keeper_registry.wasm` size, in bytes.
+# Read by the `wasm-size` CI job (.github/workflows/ci.yml) to report a
+# delta on every PR. Update process: see docs/CI.md#updating-the-baseline.
+29372

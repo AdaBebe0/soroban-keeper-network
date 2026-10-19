@@ -1,161 +1,930 @@
 name: CI
 
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+# Runs automatically on every pull request and on every push to main.
+# No manual step is needed — open a PR and this workflow starts.
+#
+# Job policy (see docs/CI.md for the rationale):
+#   REQUIRED  — format, test, build-wasm, sdk-ts, bot, bot-v2, indexer, rust-sdk,
+#               indexer-client. These block the merge.
+#   ADVISORY  — clippy, audit, wasm-size, sdk-ts-lint, sdk-bundle-size, fuzz-pr,
+#               resource-cost. These report findings as annotations or a job
+#               summary but never fail your PR.
+#
+# `bot`'s name/needs status has said "(required)" since before this comment
+# was last touched, even though the comment right above that job's own
+# definition still says "ADVISORY" — a pre-existing inconsistency, not
+# introduced or resolved here (see that job's own note).
+#
+# The split is deliberate. A contributor should never be blocked by a new
+# upstream advisory or a subjective lint, but formatting, a green test suite,
+# and a contract that actually compiles to WASM are non-negotiable.
+#
+# IMPORTANT: The required CI jobs (format, test, build-wasm) must remain
+# synchronized with the `make ci` target in the Makefile. Contributors should
+# be able to reproduce all blocking CI checks locally by running `make ci`.
+# If you modify the required jobs here, update the Makefile accordingly.
 
-# Cancel superseded runs on the same ref so pushes don't pile up CI jobs.
+on:
+  pull_request:
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+
+# Superseded runs on the same branch are cancelled so a series of pushes
+# doesn't queue up redundant jobs.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
-  RUSTFLAGS: "-D warnings"
+  # Keep incremental compilation off in CI: it costs cache space and buys
+  # nothing on a cold runner.
+  CARGO_INCREMENTAL: 0
 
 jobs:
-  # ── Lint & Format ────────────────────────────────────────────────────────────
-  lint:
-    name: Lint & Format
+  # ───────────────────────────────────────────────────────────────────────────
+  # REQUIRED — formatting
+  # ───────────────────────────────────────────────────────────────────────────
+  format:
+    name: Format (required)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - name: Install Rust toolchain
+      - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt, clippy
+          components: rustfmt
 
-      - name: Cache Cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-lint-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-lint-
-
-      - name: Check formatting
+      - name: cargo fmt --check
         run: cargo fmt --all -- --check
 
-      - name: Run Clippy (all features)
-        run: cargo clippy --all --all-targets --all-features -- -D warnings
+      - name: How to fix
+        if: failure()
+        run: |
+          echo "::error::Formatting check failed. Run 'cargo fmt --all' locally and commit the result."
 
-  # ── Unit & Integration Tests ─────────────────────────────────────────────────
+  # ───────────────────────────────────────────────────────────────────────────
+  # REQUIRED — test suite
+  # ───────────────────────────────────────────────────────────────────────────
   test:
-    name: Tests
+    name: Tests (required)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - name: Install Rust toolchain
+      - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown
 
-      - name: Cache Cargo registry
-        uses: actions/cache@v4
+      - name: Cache cargo
+        uses: actions/cache@v6
         with:
           path: |
-            ~/.cargo/registry
-            ~/.cargo/git
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
             target
           key: ${{ runner.os }}-cargo-test-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-test-
+          restore-keys: ${{ runner.os }}-cargo-test-
 
-      - name: Run unit tests
-        run: cargo test --all --locked --features testutils -- --nocapture
+      - name: cargo test
+        run: cargo test --workspace --locked
 
-  # ── WASM Build ───────────────────────────────────────────────────────────────
+  # ───────────────────────────────────────────────────────────────────────────
+  # REQUIRED — the contract must compile to WASM
+  # ───────────────────────────────────────────────────────────────────────────
   build-wasm:
-    name: Build WASM
+    name: Build WASM (required)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - name: Install Rust toolchain
+      - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
 
-      - name: Cache Cargo registry
-        uses: actions/cache@v4
+      - name: Cache cargo
+        uses: actions/cache@v6
         with:
           path: |
-            ~/.cargo/registry
-            ~/.cargo/git
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
             target
           key: ${{ runner.os }}-cargo-wasm-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-wasm-
+          restore-keys: ${{ runner.os }}-cargo-wasm-
 
-      - name: Install soroban CLI
+      - name: Build release WASM (keeper-registry)
         run: |
-          curl -sSL https://raw.githubusercontent.com/stellar/soroban-tools/main/scripts/install_soroban.sh | bash
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-
-      - name: Build WASM (release)
-        run: |
-          cargo build --release --locked --target wasm32-unknown-unknown \
+          cargo build --locked --release \
+            --target wasm32-unknown-unknown \
             --package keeper-registry
+
+      - name: Upload keeper-registry WASM artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: keeper-registry-wasm
+          path: target/wasm32-unknown-unknown/release/keeper_registry.wasm
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Build release WASM (treasury)
+        run: |
+          cargo build --locked --release \
+            --target wasm32-unknown-unknown \
+            --package keeper-treasury
+
+      - name: Upload treasury WASM artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: treasury-wasm
+          path: target/wasm32-unknown-unknown/release/keeper_treasury.wasm
+          retention-days: 14
+          if-no-files-found: error
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # ADVISORY — clippy. Findings appear as inline PR annotations.
+  # ───────────────────────────────────────────────────────────────────────────
+  clippy:
+    name: Clippy (advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache cargo
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ runner.os }}-cargo-clippy-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-clippy-
+
+      # Warnings are surfaced, not denied. Maintainers decide during review
+      # whether a given lint is worth acting on.
+      - name: cargo clippy
+        run: cargo clippy --workspace --all-targets --locked
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # ADVISORY — dependency advisories. A new upstream CVE should notify us,
+  # not break every open PR.
+  # ───────────────────────────────────────────────────────────────────────────
+  audit:
+    name: Dependency audit (advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
+      - name: cargo audit
+        run: |
+          cargo audit --json > audit.json || true
+          {
+            echo "### Dependency audit"
+            echo
+            if [ "$(jq '.vulnerabilities.count' audit.json)" = "0" ]; then
+              echo "No known advisories affect this dependency tree."
+            else
+              echo "\`cargo audit\` reported $(jq '.vulnerabilities.count' audit.json) advisory/advisories:"
+              echo
+              jq -r '.vulnerabilities.list[] | "- **\(.advisory.id)** in `\(.package.name) \(.package.version)` — \(.advisory.title)"' audit.json
+              echo
+              echo "_Advisory only — this does not block the PR._"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # ADVISORY — report the optimized WASM size so reviewers can spot a
+  # regression without having to build locally.
+  # ───────────────────────────────────────────────────────────────────────────
+  wasm-size:
+    name: WASM size report (advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    needs: build-wasm
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Download WASM artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: keeper-registry-wasm
+          path: wasm
 
       - name: Install wasm-opt
         run: |
-          cargo install wasm-opt --locked || true
+          VERSION=version_119
+          curl -sSL "https://github.com/WebAssembly/binaryen/releases/download/${VERSION}/binaryen-${VERSION}-x86_64-linux.tar.gz" \
+            | tar -xz
+          echo "$PWD/binaryen-${VERSION}/bin" >> "$GITHUB_PATH"
 
-      - name: Optimize WASM
+      - name: Optimize and report
         run: |
-          WASM_FILE="target/wasm32-unknown-unknown/release/keeper_registry.wasm"
-          if [ -f "$WASM_FILE" ]; then
-            wasm-opt -Oz --strip-debug "$WASM_FILE" -o "${WASM_FILE%.wasm}.optimized.wasm"
-            ls -lh "${WASM_FILE%.wasm}.optimized.wasm"
+          RAW=wasm/keeper_registry.wasm
+          # Soroban contracts are built against a WASM target that emits
+          # bulk-memory and sign-extension instructions. wasm-opt rejects both
+          # unless the features are enabled explicitly, so these flags are
+          # required, not tuning. `stellar contract optimize` passes the same set.
+          wasm-opt -Oz --strip-debug \
+            --enable-bulk-memory --enable-sign-ext --enable-mutable-globals \
+            "$RAW" -o optimized.wasm
+          raw_bytes=$(stat -c%s "$RAW")
+          opt_bytes=$(stat -c%s optimized.wasm)
+
+          # Baseline is the last-known-good optimized size, committed at
+          # .github/wasm-size-baseline.txt (see docs/CI.md for the update
+          # process). Comparing against it turns this from "here is a number"
+          # into "here is whether this PR moved the needle."
+          baseline_bytes=$(grep -o '^[0-9]\+' .github/wasm-size-baseline.txt)
+          delta=$((opt_bytes - baseline_bytes))
+          # Integer percentage (rounds toward zero), one decimal place, no bc/python dependency.
+          delta_pct_x10=$((delta * 1000 / baseline_bytes))
+          delta_pct_whole=$((delta_pct_x10 / 10))
+          delta_pct_frac=$((delta_pct_x10 % 10))
+          if [ "$delta_pct_frac" -lt 0 ]; then delta_pct_frac=$((-delta_pct_frac)); fi
+
+          {
+            echo "### Contract WASM size"
+            echo
+            echo "| Build | Bytes | KiB |"
+            echo "|-------|-------|-----|"
+            printf '| release | %s | %s |\n' "$raw_bytes" "$((raw_bytes / 1024))"
+            printf '| release + wasm-opt -Oz | %s | %s |\n' "$opt_bytes" "$((opt_bytes / 1024))"
+            echo
+            echo "The optimized figure is what actually gets deployed to the network."
+            echo
+            printf 'Baseline (`.github/wasm-size-baseline.txt`): **%s bytes**. Delta: **%+d bytes (%+d.%d%%)**.\n' \
+              "$baseline_bytes" "$delta" "$delta_pct_whole" "$delta_pct_frac"
+            echo
+            # 5% is picked because ordinary incremental changes (a new field,
+            # an extra check) move the optimized binary by a small fraction
+            # of a percent; a jump past 5% is either a deliberate feature
+            # landing (fine, but worth a human glance) or a regression (e.g.
+            # debug info or an unintended dependency leaking into release).
+            # Advisory only, per this job's continue-on-error policy.
+            if [ "$delta_pct_x10" -ge 50 ]; then
+              echo "**:warning: WASM size grew by more than 5% relative to the baseline.** If this is intentional, update \`.github/wasm-size-baseline.txt\` per \`docs/CI.md\` before merging."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # ADVISORY — generates the sdk-ts API reference from TSDoc comments
+  # (typedoc.json) and fails the summary (but not the PR) if TypeDoc reports
+  # any warning — most usefully, an exported method/hook/type missing a doc
+  # comment ("notDocumented" in typedoc.json's validation block), so a doc
+  # regression is caught going forward without needing a separate
+  # documentation PR per method. Only runs when the PR touches
+  # packages/sdk-ts/.
+  # ───────────────────────────────────────────────────────────────────────────
+  sdk-ts-docs:
+    name: sdk-ts API reference (advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Check for relevant changes
+        id: changes
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+          elif git diff --name-only "$BASE_SHA" "$HEAD_SHA" | grep -q '^packages/sdk-ts/'; then
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "relevant=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Upload WASM artifact
-        uses: actions/upload-artifact@v4
+      - name: Install Node.js
+        if: steps.changes.outputs.relevant == 'true'
+        uses: actions/setup-node@v5
         with:
-          name: keeper-registry-wasm
-          path: |
-            target/wasm32-unknown-unknown/release/keeper_registry.wasm
-            target/wasm32-unknown-unknown/release/keeper_registry.optimized.wasm
-          retention-days: 30
-
-  # ── Security Audit ───────────────────────────────────────────────────────────
-  audit:
-    name: Security Audit
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install cargo-audit
-        run: cargo install cargo-audit --locked
-      - name: Run audit
-        run: cargo audit
-
-  # ── Example Bot (Node.js) ────────────────────────────────────────────────────
-  example-bot:
-    name: Keeper Bot (Node.js)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: "npm"
-          cache-dependency-path: examples/keeper-bot/package.json
+          node-version: 20
 
       - name: Install dependencies
-        working-directory: examples/keeper-bot
-        run: npm install
+        if: steps.changes.outputs.relevant == 'true'
+        working-directory: packages/sdk-ts
+        run: npm ci --no-audit --no-fund
 
-      - name: Lint bot code
-        working-directory: examples/keeper-bot
-        run: npm run lint --if-present
+      - name: Generate reference and check for doc-comment regressions
+        if: steps.changes.outputs.relevant == 'true'
+        working-directory: packages/sdk-ts
+        run: |
+          if npm run docs:check > typedoc-output.txt 2>&1; then
+            {
+              echo "### sdk-ts API reference"
+              echo
+              echo "Generated cleanly — every exported method, hook, and type has a documentation comment."
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "### sdk-ts API reference"
+              echo
+              echo "\`npm run docs:check\` reported warnings (treated as errors — see \`typedoc.json\`'s \`validation\` block):"
+              echo
+              echo '```'
+              cat typedoc-output.txt
+              echo '```'
+              echo
+              echo "_Advisory only — this does not block the PR, but a missing doc comment here means the generated reference is incomplete._"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
 
-      - name: Type check (if TypeScript)
+      - name: Skip notice
+        if: steps.changes.outputs.relevant == 'false'
+        run: |
+          {
+            echo "### sdk-ts API reference"
+            echo
+            echo "Skipped — no changes under \`packages/sdk-ts/\`."
+          } >> "$GITHUB_STEP_SUMMARY"
+  # ADVISORY — report the SDK's minified+gzipped bundle size, mirroring
+  # wasm-size's baseline-and-delta pattern for the frontend analogue of that
+  # concern (issue 0262 in the SDK epic).
+  # ───────────────────────────────────────────────────────────────────────────
+  sdk-bundle-size:
+    name: SDK bundle size report (advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    needs: sdk-ts
+    defaults:
+      run:
+        working-directory: packages/sdk-ts
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Build
+        run: npm run build
+
+      - name: Report bundle size
+        run: node scripts/report-bundle-size.mjs >> "$GITHUB_STEP_SUMMARY"
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # ADVISORY — time-boxed fuzz run. Every registered target (fuzz/fuzz_targets/)
+  # gets a short, fixed-budget run so regressions are caught continuously
+  # instead of only when a contributor remembers to fuzz locally. Only runs
+  # when the PR touches contracts/keeper-registry/ or fuzz/. See
+  # fuzz-nightly.yml for the longer, corpus-persisting counterpart.
+  # ───────────────────────────────────────────────────────────────────────────
+  fuzz-pr:
+    name: Fuzz (advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Check for relevant changes
+        id: changes
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+          elif git diff --name-only "$BASE_SHA" "$HEAD_SHA" | grep -qE '^(contracts/keeper-registry/|fuzz/)'; then
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "relevant=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install Rust (nightly)
+        if: steps.changes.outputs.relevant == 'true'
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Cache cargo
+        if: steps.changes.outputs.relevant == 'true'
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            fuzz/target
+          key: ${{ runner.os }}-cargo-fuzz-${{ hashFiles('fuzz/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-fuzz-
+
+      - name: Install cargo-fuzz
+        if: steps.changes.outputs.relevant == 'true'
+        run: cargo install cargo-fuzz --locked
+
+      - name: Run fuzz targets (60s each)
+        if: steps.changes.outputs.relevant == 'true'
+        run: ./scripts/run-fuzz-targets.sh 60 "Fuzz run (fuzz-pr)"
+
+      - name: Skip notice
+        if: steps.changes.outputs.relevant == 'false'
+        run: |
+          {
+            echo "### Fuzz run (fuzz-pr)"
+            echo
+            echo "Skipped — no changes under \`contracts/keeper-registry/\` or \`fuzz/\`."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload crash artifacts
+        if: always() && steps.changes.outputs.relevant == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: fuzz-pr-artifacts
+          path: fuzz/artifacts/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # ADVISORY — per-entry-point resource cost. Reports CPU instructions and
+  # memory bytes for one representative call to each state-changing entry
+  # point, compared against a checked-in baseline, in the same style as
+  # wasm-size's binary-size report.
+  # ───────────────────────────────────────────────────────────────────────────
+  resource-cost:
+    name: Resource cost report (advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ runner.os }}-cargo-test-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-test-
+
+      - name: Measure resource cost per entry point
+        run: |
+          cargo test -p keeper-registry --locked resource_report -- --ignored --nocapture
+
+      - name: Compare against baseline and report
+        run: ./scripts/report-resource-cost.sh
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # REQUIRED — the TypeScript SDK (packages/sdk-ts). Typechecked, built and
+  # tested; a type error blocks the merge, the way `cargo fmt --check` does on
+  # the Rust side. ESLint is deliberately NOT here: it is the advisory
+  # `sdk-ts-lint` job below, mirroring clippy. Built and uploaded as an
+  # artifact so `bot` (below) can install it as a real `file:` dependency
+  # without re-running its build — `npm install` on a `file:` reference
+  # copies the referenced directory as-is, it does not build it.
+  # ───────────────────────────────────────────────────────────────────────────
+  sdk-ts:
+    name: SDK (TypeScript) (required)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/sdk-ts
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        # npm ci (not npm install) so a package.json/package-lock.json
+        # drift fails this check loudly instead of npm silently rewriting
+        # the lockfile — the drift then only surfaces as a merge conflict
+        # against main days later.
+        run: npm ci --no-audit --no-fund
+
+      - name: Typecheck
+        run: npx tsc --noEmit -p tsconfig.json
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test
+
+      - name: Upload built package (for the bot job to consume)
+        uses: actions/upload-artifact@v7
+        with:
+          name: sdk-ts-dist
+          path: packages/sdk-ts/dist
+          retention-days: 1
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # ADVISORY — ESLint for the TypeScript SDK, the counterpart of `clippy`:
+  # lint findings are subjective enough that a maintainer should decide
+  # case-by-case, so this never blocks a PR. Uses packages/sdk-ts's flat config
+  # (eslint.config.cjs — `.cjs` because that package is `"type": "module"`).
+  # The type-correctness half of this concern is the required `sdk-ts` job.
+  # ───────────────────────────────────────────────────────────────────────────
+  sdk-ts-lint:
+    name: SDK lint (advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    defaults:
+      run:
+        working-directory: packages/sdk-ts
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      # Findings are surfaced, not denied. Maintainers decide during review
+      # whether a given rule is worth acting on.
+      - name: ESLint
+        run: npm run lint
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # REQUIRED — the indexer's TypeScript client (packages/indexer-client). Its
+  # request/response types are generated from indexer/openapi.yaml (issue
+  # 0373); "Types are generated from or validated against the OpenAPI schema
+  # in CI, catching drift automatically" is the acceptance criterion this
+  # job's last step exists for — regenerate, then fail if that changed
+  # anything, so a handler change that isn't reflected in openapi.yaml (or a
+  # openapi.yaml edit the generated types weren't regenerated from) is a red
+  # CI check, not something a contributor has to remember to notice. This
+  # does not re-verify that indexer/openapi.yaml itself is accurate against
+  # the Rust handlers -- that is the `indexer` job's own committed-file check
+  # (indexer/src/api/mod.rs's `the_openapi_document_describes_every_route`
+  # test); this job only checks that this package's generated types match
+  # whatever indexer/openapi.yaml currently says.
+  # ───────────────────────────────────────────────────────────────────────────
+  indexer-client:
+    name: Indexer client (TypeScript) (required)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/indexer-client
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Typecheck
+        run: npx tsc --noEmit -p tsconfig.json
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Verify generated types match indexer/openapi.yaml
+        run: |
+          npm run generate:types
+          if ! git diff --exit-code -- src/generated/openapi-types.ts; then
+            echo "::error::src/generated/openapi-types.ts is stale relative to indexer/openapi.yaml. Run 'npm run generate:types' in packages/indexer-client and commit the result."
+            exit 1
+          fi
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # ADVISORY — the example keeper bot. It is a reference implementation, so a
+  # lint nit there should not gate a contract PR.
+  #
+  # NOTE: despite the comment above (and despite this job's own docstring
+  # here), this job's `name:` says "(required)" and `ci-required` (below)
+  # already listed `bot` in its `needs:` before this PR — a pre-existing
+  # inconsistency between this comment and the job's actual required status,
+  # left as-is rather than silently resolved one way or the other as part of
+  # an unrelated SDK migration PR.
+  # ───────────────────────────────────────────────────────────────────────────
+  bot:
+    name: Keeper bot (required)
+    runs-on: ubuntu-latest
+    needs: sdk-ts
+    defaults:
+      run:
         working-directory: examples/keeper-bot
-        run: npm run typecheck --if-present || true
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "20"
+
+      - name: Download built SDK
+        uses: actions/download-artifact@v8
+        with:
+          name: sdk-ts-dist
+          path: packages/sdk-ts/dist
+
+      - name: Install SDK's own runtime dependencies
+        # Node's ESM resolver walks up from the real path of the imported
+        # file (packages/sdk-ts/dist/client.js), not from the bot's
+        # node_modules the file: dependency symlinks into — so
+        # @stellar/stellar-sdk must exist under packages/sdk-ts itself, not
+        # just under the bot. It is only a peer/devDependency here (real
+        # consumers bring their own copy), so `--omit=dev` would skip the
+        # one place npm can actually resolve it from in this job.
+        working-directory: packages/sdk-ts
+        run: npm ci --no-audit --no-fund
+
+      - name: Install dependencies
+        # npm ci, not npm install — a stale package-lock.json fails this
+        # check instead of npm silently rewriting it, so drift shows up as
+        # a red check on the PR instead of a conflict against main later.
+        run: npm ci --no-audit --no-fund
+
+      - name: Run tests
+        run: npm test
+
+      - name: Syntax check
+        run: node --check index.js
+
+      - name: Lint
+        run: npm run lint
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # REQUIRED — the keeper-bot-v2 service. Build, lint, and test suite, with
+  # an ephemeral Postgres service container for persistent state tests.
+  #
+  # Ephemeral service container mirrors the indexer approach (issue 0233):
+  # an isolated Postgres container created specifically for this job and
+  # destroyed with it, ensuring test idempotency without shared state.
+  #
+  # Runs only when the PR touches examples/keeper-bot-v2/, packages/sdk-ts/,
+  # or .github/workflows/ci.yml. A contract-only PR skips it while reporting
+  # success, so bot-v2 can be a required gate without blocking contract work.
+  # ───────────────────────────────────────────────────────────────────────────
+  bot-v2:
+    name: Keeper bot v2 (required)
+    runs-on: ubuntu-latest
+    needs: sdk-ts
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: keeper_bot_v2_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    defaults:
+      run:
+        working-directory: examples/keeper-bot-v2
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Check for relevant changes
+        id: changes
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+          elif git diff --name-only "$BASE_SHA" "$HEAD_SHA" | grep -qE '^(examples/keeper-bot-v2/|packages/sdk-ts/|\.github/workflows/ci\.yml)'; then
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "relevant=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Node.js
+        if: steps.changes.outputs.relevant == 'true'
+        uses: actions/setup-node@v5
+        with:
+          node-version: "20"
+
+      - name: Download SDK artifact
+        if: steps.changes.outputs.relevant == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          name: sdk-ts-dist
+          path: packages/sdk-ts/dist
+
+      - name: Install SDK dependencies
+        if: steps.changes.outputs.relevant == 'true'
+        working-directory: packages/sdk-ts
+        run: npm ci --no-audit --no-fund
+
+      - name: Install keeper-bot-v2 dependencies
+        if: steps.changes.outputs.relevant == 'true'
+        run: npm ci --no-audit --no-fund
+
+      - name: Build keeper-bot-v2
+        if: steps.changes.outputs.relevant == 'true'
+        run: npm run build
+
+      - name: Lint keeper-bot-v2
+        if: steps.changes.outputs.relevant == 'true'
+        run: npm run lint
+
+      - name: Test keeper-bot-v2 against ephemeral Postgres
+        if: steps.changes.outputs.relevant == 'true'
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/keeper_bot_v2_test
+        run: npm test
+
+      - name: Skipped (no keeper-bot-v2 changes)
+        if: steps.changes.outputs.relevant == 'false'
+        run: |
+          echo "PR does not touch examples/keeper-bot-v2 or SDK dependencies; keeper-bot-v2 checks skipped."
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # REQUIRED — the indexer service. Format, build and test, with a real
+  # Postgres for the database-backed tests.
+  #
+  # The database is an ephemeral service container, created for this job and
+  # destroyed with it, rather than a shared instance. Tests here drop and
+  # recreate their tables, so a shared database would let concurrent runs
+  # corrupt each other's state and would make a green run depend on what else
+  # happened to be running at the time.
+  #
+  # Only runs when the PR touches indexer/ (or the workspace manifest, which
+  # can change how the indexer builds). A contract-only PR skips it, in the
+  # same style as fuzz-pr — but note the skip still reports success, so this
+  # job can be a required check without blocking contract-only work.
+  # ───────────────────────────────────────────────────────────────────────────
+  indexer:
+    name: Indexer (required)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: indexer_test
+        ports:
+          - 5432:5432
+        # Without a health check the job can start querying before Postgres is
+        # accepting connections, which fails as a confusing connection error
+        # rather than a wait.
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Check for relevant changes
+        id: changes
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+          elif git diff --name-only "$BASE_SHA" "$HEAD_SHA" | grep -qE '^(indexer/|Cargo\.toml|Cargo\.lock)'; then
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "relevant=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install Rust
+        if: steps.changes.outputs.relevant == 'true'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Cache cargo
+        if: steps.changes.outputs.relevant == 'true'
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ runner.os }}-cargo-indexer-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-indexer-
+
+      - name: cargo fmt --check
+        if: steps.changes.outputs.relevant == 'true'
+        run: cargo fmt --package keeper-indexer -- --check
+
+      - name: Build
+        if: steps.changes.outputs.relevant == 'true'
+        run: cargo build --package keeper-indexer --locked
+
+      # INDEXER_TEST_DATABASE_URL is what makes the database-backed tests run.
+      # When it is unset they skip themselves, which is what keeps the
+      # workspace-wide `test` job (and a contract contributor's laptop) green
+      # without a Postgres. Here it is set, so they must actually execute —
+      # hence the assertion on the result count below.
+      - name: Test
+        if: steps.changes.outputs.relevant == 'true'
+        env:
+          INDEXER_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/indexer_test
+        run: cargo test --package keeper-indexer --locked -- --nocapture
+
+      # A test that skips itself still exits 0, so a misconfigured database URL
+      # would turn the whole suite into a silent no-op and the job would stay
+      # green. Failing when any test reports a skip is what stops this job from
+      # passing vacuously.
+      - name: Verify the database-backed tests actually ran
+        if: steps.changes.outputs.relevant == 'true'
+        env:
+          INDEXER_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/indexer_test
+        run: |
+          output=$(cargo test --package keeper-indexer --locked -- --nocapture 2>&1)
+          if echo "$output" | grep -q "skipping: INDEXER_TEST_DATABASE_URL"; then
+            echo "::error::A database-backed test skipped itself even though a database was configured."
+            exit 1
+          fi
+          echo "All database-backed tests ran against the service container."
+
+      - name: Skip notice
+        if: steps.changes.outputs.relevant == 'false'
+        run: |
+          {
+            echo "### Indexer"
+            echo
+            echo "Skipped — no changes under \`indexer/\` or the workspace manifest."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # REQUIRED — Rust SDK crate check & test (Issue #343)
+  # ───────────────────────────────────────────────────────────────────────────
+  rust-sdk:
+    name: Rust SDK (required)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust SDK tests
+        run: cargo test --package soroban-keeper-sdk --locked
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Aggregate gate. Branch protection should require only this single check;
+  # it passes when all REQUIRED jobs pass and ignores advisory outcomes.
+  # ───────────────────────────────────────────────────────────────────────────
+  ci-required:
+    name: CI required checks
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [format, test, build-wasm, sdk-ts, bot, bot-v2, indexer, rust-sdk, indexer-client]
+    steps:
+      - name: Verify required jobs succeeded
+        run: |
+          results='${{ join(needs.*.result, ' ') }}'
+          echo "Required job results (format, test, build-wasm, sdk-ts, bot, bot-v2, indexer, rust-sdk, indexer-client): $results"
+          for r in $results; do
+            if [ "$r" != "success" ]; then
+              echo "::error::A required CI job did not succeed."
+              exit 1
+            fi
+          done
+          echo "All required checks passed."
+

@@ -28,6 +28,30 @@
 - name: tooling
   color: "c2e0c6"
   description: CI, scripts, developer experience
+- name: ts-sdk
+  color: "0052cc"
+  description: TypeScript SDK (packages/sdk-ts)
+- name: rust-sdk
+  color: "0052cc"
+  description: Rust SDK (rust-sdk/)
+- name: indexer
+  color: "5319e7"
+  description: Event indexer and its TypeScript client
+- name: observability
+  color: "bfdadc"
+  description: Metrics, logging, tracing, alerting and runbooks
+- name: staking
+  color: "1d76db"
+  description: Keeper staking, slashing and disputes
+- name: oracle
+  color: "1d76db"
+  description: Oracle-backed task conditions (epic E11)
+- name: cli
+  color: "c5def5"
+  description: The skn command-line tool (epic E16)
+- name: dashboard
+  color: "f9d0c4"
+  description: Web dashboard (epic E17)
 
 # ── Type / status ──────────────────────────────────────────────────────
 - name: bug
@@ -36,6 +60,12 @@
 - name: enhancement
   color: "a2eeef"
   description: New feature or request
+- name: correctness
+  color: "d93f0b"
+  description: Behaviour does not match the specification
+- name: performance
+  color: "fef2c0"
+  description: Speed, size or resource cost
 - name: security
   color: "ee0701"
   description: Security-sensitive — handle with care

@@ -82,19 +82,21 @@ rustup target list --installed | grep wasm32
 cd examples/keeper-bot && npm install && cd ../..
 
 # Run tests (should all pass on a clean checkout)
-cargo test --all --features testutils
+cargo test --workspace --locked
 
 # Build WASM
-cargo build --release --target wasm32-unknown-unknown --package keeper-registry
+cargo build --locked --release --target wasm32-unknown-unknown --package keeper-registry
 
-# Check formatting and lints (must be clean before PR)
-cargo fmt --all -- --check
-cargo clippy --all --all-targets --all-features -- -D warnings
+# Run all required CI checks locally
+make ci
+
+# Optionally run stricter checks (includes clippy)
+make check
 ```
 
----
+We use **trunk-based development**. The `main` branch is the trunk, and it must always be stable and releasable.
 
-## Project Structure
+All work happens on short-lived branches prefixed with `feature/`, `fix/`, etc.
 
 ```
 soroban-keeper-network/
@@ -110,6 +112,8 @@ soroban-keeper-network/
 │   └── deploy.sh                 # Deployment script
 ├── examples/
 │   └── keeper-bot/               # Off-chain keeper bot (Node.js)
+├── packages/
+│   └── sdk-ts/                   # TypeScript SDK for the contract (npm package)
 ├── .github/
 │   └── workflows/
 │       └── ci.yml                # GitHub Actions CI
@@ -120,33 +124,129 @@ soroban-keeper-network/
 └── LICENSE
 ```
 
----
-
-## Git Workflow
-
-We use a **trunk-based development** model with protected long-lived branches:
-
-```
-main ──────────────────────────────────────────────────────── (always stable, released)
-  └── develop ────────────────────────────────────────────── (integration branch)
-        ├── feature/add-verifier-interface
-        ├── fix/reclaim-lock-ledger-check
-        └── chore/update-soroban-sdk-22
-```
-
-### Branch Purposes
-
 | Branch | Purpose | Direct push? |
 |--------|---------|-------------|
-| `main` | Latest stable release, tagged versions | **Never** |
-| `develop` | Integration of completed features before release | **Never** |
+| `main` | The single source of truth. Always stable. | **Never** |
 | `feature/*` | New features | Your own branch — yes |
 | `fix/*` | Bug fixes | Your own branch — yes |
 | `chore/*` | Dependency updates, tooling, CI | Your own branch — yes |
 | `docs/*` | Documentation only changes | Your own branch — yes |
 | `refactor/*` | Code restructuring (no behaviour change) | Your own branch — yes |
 
-> **CRITICAL**: Never push directly to `main` or `develop`. All changes go through PRs with at least one review. This rule is enforced via branch protection rules.
+---
+
+## Project Structure
+
+The contract and its tests are split into small, single-purpose modules. This
+is deliberate: it keeps two contributors working on different areas out of each
+other's way, because their changes land in different files instead of colliding
+at the end of one large one.
+
+```
+contracts/keeper-registry/src/
+├── lib.rs         module wiring, the contract struct, re-exports
+├── errors.rs      KeeperError
+├── types.rs       DataKey, Task, TaskType, TaskStatus, BatchTaskParams
+├── constants.rs   every tunable bound and protocol constant
+├── events.rs      the emit_* helpers
+├── internal.rs    shared pub(crate) helpers and guards
+├── task.rs        register / claim / execute / cancel / expire / withdraw
+├── batch.rs       batch_register_tasks, get_tasks, get_tasks_range
+├── admin.rs       initialize, pause, fees, transfer_admin, upgrade, sweep
+├── views.rs       read-only getters
+├── verifier.rs    IKeeperVerifier interface, KeeperVerifierClient
+├── invariants.rs  shared invariant assertions (tests and fuzz targets)
+└── test/          one module per area, mirroring the list above
+```
+
+**Where does my change go?**
+
+| You are… | Edit |
+|----------|------|
+| changing a task lifecycle rule | `task.rs` + `test/<area>.rs` |
+| adding or changing an admin control | `admin.rs` + `test/admin.rs` |
+| adding a read-only view | `views.rs` + `test/…` |
+| adding an error variant | `errors.rs` — append it under your epic's `// ─── E0N — ... ───` banner (add one at the end if it doesn't exist yet, never interleave with another epic's block), at the next free discriminant, never renumber |
+| adding a type used by the contract's storage/ABI | `types.rs` — under the matching epic banner inside "Domain Types" |
+| changing a bound or magic number | `constants.rs` — it should exist in exactly one place |
+| adding an event | `events.rs` — under your epic's banner, same convention as `errors.rs`, and update the README event table |
+| adding a helper used by more than one entry point | `internal.rs` as `pub(crate)` |
+| adding a test fixture used by more than one test module | `test/common.rs` as `pub(crate)` |
+| changing the verifier interface or how `execute_task` calls it | `verifier.rs` + `task.rs` + `test/verifier.rs`, and `docs/VERIFIER_DESIGN.md` |
+
+Two conventions worth following, both learned the hard way:
+
+- **Never inline a value that is enforced in more than one place.** Give it a
+  name in `constants.rs`. A literal repeated across call sites means a rule
+  change touches every one of them, which is how one small edit ends up
+  conflicting with every open PR.
+- **Name test helper modules after their scope** (`reentrant_token_cancel`,
+  not `reentrant_token`). Two PRs that each add a generically named helper
+  module will compile alone and fail once both land.
+
+---
+
+## Where Contributors Come In
+
+The MVP contract is functional and stable. The open work now focuses on three
+published epics spanning 100 issues (0051–0150):
+
+- **E03 Fuzzing & Invariant Testing** (20 issues) — property-based tests,
+  stateful model checking, and mutation testing to systematically verify the
+  money-movement invariants documented in `docs/ARCHITECTURE.md`.
+- **E04 On-chain Execution Verifier** (26 issues) — the `IKeeperVerifier`
+  interface and registry-side verification callback, allowing target protocols
+  to enforce that a keeper actually performed the promised work on-chain before
+  the registry credits the reward.
+- **E05 Batch Operations & Gas** (22 issues) — batch registration (already
+  shipped), storage layout tuning, WASM size optimization, and CPU budget work.
+
+Each epic closes with a retrospective documenting what shipped versus what was
+studied and deferred. See the **epic index** in `.github/backlog/README.md`
+for the full roadmap, including wave 3 (TypeScript SDK, Rust SDK, event
+indexer, keeper bot v2) and beyond.
+
+**Picking an issue:**
+
+1. Browse `.github/backlog/issues/` or filter by label on GitHub Issues.
+2. Look for the `good-first-issue` label if this is your first contribution.
+3. Comment on the issue to claim it before starting work.
+4. Follow the [Git Workflow](#git-workflow) and [PR Requirements](#branching--pr-rules) below.
+
+## Git Workflow
+
+We use **trunk-based development**. The `main` branch is the trunk, and it must always be stable and releasable.
+
+All work happens on short-lived branches prefixed with `feature/`, `fix/`, etc.
+
+```
+main ────────────────────────────────────────────────── (always stable, releasable)
+  ├── feature/add-verifier-interface
+  ├── fix/reclaim-lock-ledger-check
+  └── chore/update-soroban-sdk-22
+```
+
+### Branch Purposes
+
+| Branch | Purpose | Direct push? |
+|--------|---------|-------------|
+| `main` | The single source of truth. Always stable. | **Never** |
+| `feature/*` | New features | Your own branch — yes |
+| `fix/*` | Bug fixes | Your own branch — yes |
+| `chore/*` | Dependency updates, tooling, CI | Your own branch — yes |
+| `docs/*` | Documentation only changes | Your own branch — yes |
+| `refactor/*` | Code restructuring (no behaviour change) | Your own branch — yes |
+
+### Branch Protection
+
+The `main` branch is protected by the following rules:
+
+- **Requires a Pull Request**: All changes must be made through a PR.
+- **Requires Status Checks to Pass**: CI jobs (build, test, lint) must pass before merging.
+- **Requires Review**: At least one maintainer must approve the PR.
+- **No Force Pushing**: History cannot be rewritten.
+
+> **CRITICAL**: Never push directly to `main`. All changes go through PRs with at least one review. This rule is enforced via branch protection rules.
 
 ---
 
@@ -156,11 +256,11 @@ main ─────────────────────────
 
 1. **Check Issues** — is this already being worked on? Comment on the issue to signal intent.
 2. **Open an issue** — if one doesn't exist, open it and get feedback before writing code.
-3. **Branch from `develop`**, not `main`:
+3. **Branch from `main`**:
 
 ```bash
-git checkout develop
-git pull origin develop
+git checkout main
+git pull origin main
 git checkout -b feature/your-feature-name
 ```
 
@@ -168,10 +268,9 @@ git checkout -b feature/your-feature-name
 
 Before opening a PR:
 
-- [ ] Branch is based on `develop` (not `main`)
-- [ ] `cargo fmt --all` passes (no formatting diff)
-- [ ] `cargo clippy --all --all-targets --all-features -- -D warnings` passes
-- [ ] All existing tests pass: `cargo test --all --features testutils`
+- [ ] Branch is based on `main`
+- [ ] `make ci` passes (format check, tests, WASM build)
+- [ ] `make check` passes (ci + clippy) — or explain why clippy warnings are acceptable
 - [ ] New code has corresponding test coverage
 - [ ] No `TODO`, `FIXME`, or `unwrap()` added without a comment explaining why
 - [ ] No sensitive data (keys, credentials) in any file
@@ -265,7 +364,7 @@ not unix timestamp. Existing tasks with in-flight claims are unaffected.
 
 - **Style**: ES2022+, `"use strict"`, CommonJS (`require`).
 - **No TypeScript** in the example (to keep it beginner-friendly). A TypeScript version is welcome as a separate example.
-- **Linting**: ESLint with the config in `examples/keeper-bot/.eslintrc.json`.
+- **Linting**: ESLint with the config in `examples/keeper-bot/eslint.config.js`.
 
 ---
 
@@ -294,17 +393,55 @@ cargo watch -x "test --all --features testutils"
 
 ### Test Structure
 
-- Unit tests live in `contracts/keeper-registry/src/test.rs`.
+- Unit tests live in `contracts/keeper-registry/src/test/`, split by area
+  (see the Project Structure section above).
 - Integration tests that cross contract boundaries go in `tests/`.
 - Use `Env::default()` + `env.mock_all_auths()` for simplicity in unit tests.
 - Use real auth flows when testing auth-specific paths.
+
+### Fuzzing & crash-to-regression convention
+
+A crash found by the fuzz harness (`fuzz/fuzz_targets/`) and merely "fixed"
+is a bug that can silently come back — a future refactor can reintroduce
+the same shape of mistake, and the fuzzer might not rediscover it for a
+long time since it searches randomly rather than systematically. **Every
+crash the fuzzer finds must become a permanent, checked-in regression**,
+not just a patched line of contract code:
+
+1. Minimize the crashing input (`cargo fuzz tmin <target> <path-to-crash>`)
+   and commit it under `fuzz/corpus/<target>/regressions/`, so the fuzzer's
+   own corpus keeps re-testing it on every future run.
+2. Add a corresponding `#[test]` in `contracts/keeper-registry/src/test/`
+   that reproduces the exact scenario **in human-readable form** — the
+   actual sequence of contract calls that triggered the crash, not "replay
+   these fuzzer bytes." A raw fuzzer input replay is not reviewable by a
+   human and doesn't explain *why* the input was dangerous.
+3. If the crash revealed a gap in one of the money invariants (`I-1`
+   through `I-7` in `docs/ARCHITECTURE.md`), consider whether it should
+   also become a case in the corresponding property test rather than only
+   a one-off regression.
+
+Any PR that fixes a bug found by fuzzing must include both the minimized
+corpus entry and the human-readable regression test in the same commit as
+the fix — see the PR template's checkbox for this.
+
+See [`docs/FUZZING.md`](docs/FUZZING.md) for how to run an existing fuzz
+target, add a new one, and use the shared `invariants` module.
+
+**"How do I know if my change broke an invariant?"** Start with
+[`docs/FUZZING.md`'s "Epic E03 retrospective: invariant coverage
+map"](docs/FUZZING.md#epic-e03-retrospective-invariant-coverage-map) — it
+lists every numbered invariant alongside the property test and/or fuzz
+target that actually exercises it, so you can find (or add to) the
+relevant coverage instead of re-deriving it from scratch.
 
 ---
 
 ## PR Template & Review Process
 
-When you open a PR, GitHub will populate this template automatically (save it at `.github/PULL_REQUEST_TEMPLATE.md`):
+When you open a PR, GitHub will populate this template automatically from `.github/PULL_REQUEST_TEMPLATE.md`.
 
+### Example Template
 ```markdown
 ## Summary
 
@@ -327,7 +464,7 @@ When you open a PR, GitHub will populate this template automatically (save it at
 - [ ] New tests added for new code
 - [ ] No `unwrap()` without explanation
 - [ ] No sensitive data in code or commits
-- [ ] PR targets `develop`, not `main`
+- [ ] PR targets `main`
 
 ## Related Issues
 
@@ -336,12 +473,14 @@ Closes #<!-- issue number -->
 
 ### Review Process
 
-1. Open PR against `develop`.
+1. Open PR against `main`.
 2. CI must be green before review is requested.
 3. Request review from at least one maintainer (tag `@Andreschuks101` for now).
 4. Address all review comments. Mark conversations resolved after addressing.
 5. Maintainer squash-merges the PR with a conventional commit message.
 6. Delete the feature branch after merge.
+
+**Note on Dependabot PRs**: Automated dependency update PRs from Dependabot follow the same review process as all other pull requests. Maintainers will review the changelog, check for breaking changes, and verify CI passes before merging.
 
 ### Review Turnaround
 
@@ -371,15 +510,14 @@ Maintainers aim to respond within **48 hours** on weekdays. Complex PRs may take
 
 ## Release Process
 
-1. **Feature freeze** — all features targeting the release are merged to `develop`.
-2. **Release branch** — create `release/vX.Y.Z` from `develop`.
-3. **Final testing** — run full test suite + testnet deployment on release branch.
-4. **Changelog** — update `CHANGELOG.md` (use Conventional Commits history as source).
-5. **Version bump** — update `version` in all `Cargo.toml` files.
-6. **PR to `main`** — merge `release/vX.Y.Z` → `main` via PR (requires 2 maintainer approvals).
-7. **Tag** — `git tag -s vX.Y.Z -m "Release vX.Y.Z"` + `git push origin vX.Y.Z`.
-8. **GitHub Release** — create release with changelog notes and attach optimized WASM artifact.
-9. **Back-merge** — merge `main` → `develop` to sync the version bump.
+1. **Agree on a release version** — maintainers decide on the next `vX.Y.Z` number.
+2. **Create a release branch** — `git checkout -b release/vX.Y.Z main`.
+3. **Final testing** — run the full test suite and deploy to testnet from the release branch.
+4. **Update `CHANGELOG.md`** — use the commit history to add notable changes.
+5. **Bump versions** — update the `version` in all relevant `Cargo.toml` files.
+6. **Open a PR** — merge the release branch into `main`. This PR requires at least two maintainer approvals.
+7. **Tag the release** — after merging, pull the latest `main`, then run `git tag -s vX.Y.Z -m "Release vX.Y.Z"` and `git push origin vX.Y.Z`.
+8. **Create a GitHub Release** — go to the tags page, create a new release from the tag, and paste the changelog notes. Attach the optimized WASM file.
 
 ### Versioning
 

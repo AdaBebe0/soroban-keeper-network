@@ -1,0 +1,79 @@
+{
+    "entry_points": [
+        {
+            "name": "initialize",
+            "cpu_instructions": 62037,
+            "memory_bytes": 9832
+        },
+        {
+            "name": "register_task",
+            "cpu_instructions": 251855,
+            "memory_bytes": 40954
+        },
+        {
+            "name": "increase_reward",
+            "cpu_instructions": 244892,
+            "memory_bytes": 38042
+        },
+        {
+            "name": "extend_deadline",
+            "cpu_instructions": 88885,
+            "memory_bytes": 16719
+        },
+        {
+            "name": "claim_task",
+            "cpu_instructions": 104711,
+            "memory_bytes": 19889
+        },
+        {
+            "name": "execute_task",
+            "cpu_instructions": 162697,
+            "memory_bytes": 30996
+        },
+        {
+            "name": "withdraw_rewards",
+            "cpu_instructions": 235675,
+            "memory_bytes": 40598
+        },
+        {
+            "name": "cancel_task",
+            "cpu_instructions": 262257,
+            "memory_bytes": 44499
+        },
+        {
+            "name": "expire_task",
+            "cpu_instructions": 252526,
+            "memory_bytes": 42371
+        },
+        {
+            "name": "pause",
+            "cpu_instructions": 95885,
+            "memory_bytes": 19518
+        },
+        {
+            "name": "unpause",
+            "cpu_instructions": 96366,
+            "memory_bytes": 19790
+        },
+        {
+            "name": "set_fee_bps",
+            "cpu_instructions": 99296,
+            "memory_bytes": 20174
+        },
+        {
+            "name": "set_min_reward",
+            "cpu_instructions": 101148,
+            "memory_bytes": 20678
+        },
+        {
+            "name": "sweep_fees",
+            "cpu_instructions": 267037,
+            "memory_bytes": 50539
+        },
+        {
+            "name": "transfer_admin",
+            "cpu_instructions": 129588,
+            "memory_bytes": 31057
+        }
+    ]
+}

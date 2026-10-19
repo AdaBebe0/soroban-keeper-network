@@ -1,0 +1,32 @@
+{
+  "name": "soroban-batch-register",
+  "version": "0.1.0",
+  "description": "Owner-side helper for registering many Keeper Network tasks in one batch_register_tasks call",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dry-run": "node index.js tasks.example.json --dry-run",
+    "test": "node --test",
+    "lint": "eslint ."
+  },
+  "keywords": [
+    "soroban",
+    "stellar",
+    "keeper",
+    "automation",
+    "batch"
+  ],
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@stellar/stellar-sdk": "^13.0.0",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "eslint": "^9.0.0",
+    "globals": "^17.8.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
