@@ -7,6 +7,7 @@ import { registerTaskCommands } from "./commands/task/index.js";
 import { createContext, SecretRedactor, type CliIo, type CommandContext } from "./context.js";
 import { CONFIG_ENV } from "./config.js";
 import { isSecretSeed, SECRET_KEY_ENV } from "./keys.js";
+import { writeError } from "./output.js";
 import { versionText } from "./version.js";
 
 /**
@@ -35,6 +36,7 @@ export function buildProgram(ctx: CommandContext): Command {
     .option("--key-file <path>", "read the signing key from a file only your user can access")
     .option("--identity <name>", "sign with a Stellar CLI identity")
     .option("--confirm-mainnet", "required by commands that send a transaction to mainnet")
+    .option("--json", "print the result as one JSON object, and errors as JSON on stdout")
     .addHelpText(
       "after",
       `\nSigning keys come from --key-file, then --identity, then $${SECRET_KEY_ENV}.` +
@@ -68,16 +70,21 @@ export async function run(argv: readonly string[], io: CliIo): Promise<number> {
   const envSecret = io.env[SECRET_KEY_ENV];
   if (envSecret) redactor.add(envSecret);
   const ctx = createContext(io, redactor);
+  // Decided before parsing, so even a failed parse can answer in the requested format.
+  const json = argv.includes("--json");
 
   // Refuse a secret passed as an argument before the parser can echo it back
   // in an "unknown option" or "too many arguments" message.
   const leaked = argv.map(argumentValue).find(isSecretSeed);
   if (leaked !== undefined) {
     redactor.add(leaked);
-    ctx.err(
-      "error: a command-line argument looks like a Stellar secret key. Secrets are never accepted " +
+    writeError(
+      ctx,
+      json,
+      "a command-line argument looks like a Stellar secret key. Secrets are never accepted " +
         "as arguments, because they end up in shell history and process listings. Use " +
         `${SECRET_KEY_ENV}, --key-file or --identity instead. The value has not been printed.`,
+      ExitCode.Usage,
     );
     return ExitCode.Usage;
   }
@@ -86,7 +93,7 @@ export async function run(argv: readonly string[], io: CliIo): Promise<number> {
     await buildProgram(ctx).parseAsync([...argv], { from: "user" });
     return ExitCode.Ok;
   } catch (error) {
-    return report(error, ctx);
+    return report(error, ctx, json);
   }
 }
 
@@ -96,15 +103,19 @@ function argumentValue(arg: string): string {
   return eq === -1 ? arg : arg.slice(eq + 1);
 }
 
-function report(error: unknown, ctx: CommandContext): number {
+function report(error: unknown, ctx: CommandContext, json: boolean): number {
   // Commander has already printed its own message (or the help/version text).
   if (error instanceof CommanderError) {
     return error.exitCode === 0 ? ExitCode.Ok : ExitCode.Usage;
   }
 
   const message = error instanceof Error ? error.message : String(error);
-  ctx.err(`error: ${message}`);
+  const exitCode = exitCodeFor(error);
+  writeError(ctx, json, message, exitCode);
+  return exitCode;
+}
 
+function exitCodeFor(error: unknown): number {
   if (error instanceof CliError) return error.exitCode;
   if (error instanceof KeeperContractError) return ExitCode.Contract;
   if (error instanceof KeeperRpcError) return ExitCode.Rpc;

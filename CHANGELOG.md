@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — skn --json output
+
+- `--json` on every `skn` command prints one JSON object on stdout instead of
+  text lines. Bigint fields are decimal strings, so values past 2^53 keep
+  their precision. Failures are JSON too, with `kind` and `exitCode`.
+- Documented the exit codes in the CLI README (2 usage, 3 contract, 4 RPC).
+
 ### Added — `skn` command-line tool (E16: 0451, 0452, 0453, 0459)
 
 - New `packages/cli` (`@soroban-keeper-network/cli`, binary `skn`) on top of

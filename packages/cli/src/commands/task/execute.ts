@@ -5,6 +5,7 @@ import type { Command } from "commander";
 
 import { CliError, ExitCode } from "../../cliError.js";
 import type { CommandContext } from "../../context.js";
+import { writeResult } from "../../output.js";
 import { openSigningSession, parseTaskId, type GlobalOptions } from "../../session.js";
 
 interface ExecuteOptions {
@@ -112,18 +113,32 @@ async function execute(
   const fee = (task.reward * BigInt(feeBps)) / 10_000n;
   const credited = task.reward - fee;
 
-  ctx.out(`Executed task ${taskId} as ${key.publicKey}.`);
-  ctx.out(
+  const lines = [
+    `Executed task ${taskId} as ${key.publicKey}.`,
     `Reward credited: ${credited} (task reward ${task.reward}, protocol fee ${fee} at ${feeBps} bps).`,
-  );
+  ];
   if (disputeWindow === undefined) {
-    ctx.out("Withdraw it with withdraw_rewards once it is available.");
+    lines.push("Withdraw it with withdraw_rewards once it is available.");
   } else if (disputeWindow === 0) {
-    ctx.out("It is withdrawable now with withdraw_rewards.");
+    lines.push("It is withdrawable now with withdraw_rewards.");
   } else {
-    ctx.out(
+    lines.push(
       `It is held as a pending credit for the ${disputeWindow}-ledger dispute window, ` +
         `then becomes withdrawable with withdraw_rewards.`,
     );
   }
+
+  writeResult(ctx, options.json === true, {
+    lines,
+    data: {
+      taskId,
+      keeper: key.publicKey,
+      status: "executed",
+      rewardCredited: credited,
+      taskReward: task.reward,
+      protocolFee: fee,
+      feeBps,
+      disputeWindowLedgers: disputeWindow ?? null,
+    },
+  });
 }

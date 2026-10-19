@@ -15,6 +15,7 @@ import { loadSigningKey, type KeyFlags, type SigningKey } from "./keys.js";
 /** Every global option, as `command.optsWithGlobals()` returns them. */
 export interface GlobalOptions extends ConnectionFlags, KeyFlags {
   confirmMainnet?: boolean | undefined;
+  json?: boolean | undefined;
 }
 
 /** The one RPC read the CLI makes itself rather than through the SDK client. */

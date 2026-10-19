@@ -117,8 +117,38 @@ contract-error and usage-error paths, and checks that the secret is absent.
 | 0 | Success. |
 | 1 | Unexpected failure. |
 | 2 | Usage error: bad arguments, config or key. Nothing was sent. |
-| 3 | The contract rejected the call, including a lost claim race or an expired deadline. |
+| 3 | The contract rejected the call, including a lost claim race or an expired deadline. Not worth retrying unchanged. |
 | 4 | RPC failure: the call never reached a contract verdict. Often worth retrying. |
+
+Scripts can branch on the exit code alone. Commander's own argument-parse
+errors (an unknown flag, a missing argument) also exit 2 and print their
+message to stderr, even with `--json`.
+
+## Machine-readable output
+
+Pass `--json` to any command to get one JSON object on stdout instead of the
+text lines. Successful runs look like this:
+
+```console
+$ skn task claim 7 --json
+{"ok":true,"taskId":"7","keeper":"G...","status":"claimed","lockExpiresAtLedger":1090,"currentLedger":1000,"ledgersRemaining":90}
+```
+
+- Every `u64`, `i128` and other bigint field is a decimal **string**, so
+  values past 2^53 keep their precision. Numeric fields such as `feeBps` and
+  ledger numbers are plain JSON numbers.
+- A value the CLI could not determine is `null`, not omitted. For example
+  `lockExpiresAtLedger` is `null` when reading the lock back failed.
+- Failures also go to stdout, with the same exit code as the text form:
+
+```console
+$ skn task claim 7 --json
+{"ok":false,"error":{"kind":"usage","exitCode":2,"message":"..."}}
+```
+
+`kind` is `usage`, `contract`, `rpc` or `failure`, matching the exit codes
+above. Warnings (such as a failed lock read-back) still go to stderr, so the
+stdout stream stays one JSON object.
 
 ## Development
 

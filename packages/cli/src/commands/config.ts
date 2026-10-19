@@ -2,6 +2,7 @@ import type { Command } from "commander";
 
 import { configPath, resolveConfig, writeInitialConfig } from "../config.js";
 import type { CommandContext } from "../context.js";
+import { writeResult } from "../output.js";
 import type { GlobalOptions } from "../session.js";
 
 export function registerConfigCommands(program: Command, ctx: CommandContext): void {
@@ -14,18 +15,26 @@ export function registerConfigCommands(program: Command, ctx: CommandContext): v
     .description("write a config file with testnet, futurenet and mainnet profiles")
     .option("--force", "overwrite an existing config file")
     .action(async (options: { force?: boolean }, command: Command) => {
-      const path = configPath(command.optsWithGlobals<GlobalOptions>(), ctx.io);
+      const globals = command.optsWithGlobals<GlobalOptions>();
+      const path = configPath(globals, ctx.io);
       const written = await writeInitialConfig(path, options.force === true);
-      ctx.out(`Wrote ${path}`);
-      ctx.out(`Profiles: ${Object.keys(written.profiles).join(", ")} (default: ${written.defaultProfile})`);
-      ctx.out(`Set "contractId" in a profile, or pass --contract-id, before running task commands.`);
+      const profiles = Object.keys(written.profiles);
+      writeResult(ctx, globals.json === true, {
+        lines: [
+          `Wrote ${path}`,
+          `Profiles: ${profiles.join(", ")} (default: ${written.defaultProfile})`,
+          `Set "contractId" in a profile, or pass --contract-id, before running task commands.`,
+        ],
+        data: { path, profiles, defaultProfile: written.defaultProfile },
+      });
     });
 
   config
     .command("show")
     .description("print the effective settings after applying flags, profile and defaults")
     .action(async (_options: unknown, command: Command) => {
-      const effective = await resolveConfig(command.optsWithGlobals<GlobalOptions>(), ctx.io);
+      const globals = command.optsWithGlobals<GlobalOptions>();
+      const effective = await resolveConfig(globals, ctx.io);
       const file = effective.configFileFound
         ? effective.configPath
         : `${effective.configPath} (not found; using built-in profiles)`;
@@ -49,6 +58,22 @@ export function registerConfigCommands(program: Command, ctx: CommandContext): v
         ],
       ];
       const width = Math.max(...rows.map(([label]) => label.length));
-      for (const [label, value] of rows) ctx.out(`${`${label}:`.padEnd(width + 2)}${value}`);
+      const lines = rows.map(([label, value]) => `${`${label}:`.padEnd(width + 2)}${value}`);
+      writeResult(ctx, globals.json === true, {
+        lines,
+        data: {
+          configPath: effective.configPath,
+          configFileFound: effective.configFileFound,
+          profile: effective.profile,
+          profileSource: effective.profileSource,
+          rpcUrl: effective.rpcUrl.value,
+          rpcUrlSource: effective.rpcUrl.source,
+          networkPassphrase: effective.networkPassphrase.value,
+          networkPassphraseSource: effective.networkPassphrase.source,
+          contractId: effective.contractId.value ?? null,
+          contractIdSource: effective.contractId.source,
+          isMainnet: effective.isMainnet,
+        },
+      });
     });
 }
